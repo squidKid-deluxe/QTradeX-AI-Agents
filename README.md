@@ -1,6 +1,8 @@
-# QTradeX Algo Trading Strategies
+# QTradeX AI Agents
 
-This repository contains a collection of algorithmic trading strategies implemented in Python, designed for use with the `qtradex` platform. Each strategy leverages technical indicators to generate buy and sell signals for trading assets. Below is a brief description of each strategy.
+## Algo Trading Strategies
+
+This repository contains a collection of algorithmic trading strategies implemented in Python, designed for use with the [QTradeX](https://github.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK) platform. Each strategy leverages technical indicators to generate buy and sell signals for trading assets. Below is a brief description of each strategy.
 
 ---
 
