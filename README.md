@@ -4,7 +4,7 @@
 
 This repository contains a collection of algorithmic trading strategies implemented in Python, designed for use with the [QTradeX](https://github.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK) platform.
 
-To install QTradex, visit the link above or simply `pip install qtradex`
+To install QTradex, see the Installation section at the link above.
 
 Each strategy leverages technical indicators to generate buy and sell signals for trading assets. Below is a brief description of each strategy.
 
