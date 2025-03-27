@@ -1,0 +1,291 @@
+{
+ "source": "\"\"\"\n\u2554\u2550\u2557\u2554\u2566\u2557\u2566\u2550\u2557\u2554\u2550\u2557\u2554\u2566\u2557\u2554\u2550\u2557\u2550\u2557 \u2566\n\u2551\u2550\u256c\u2557\u2551 \u2560\u2566\u255d\u2560\u2550\u2563 \u2551\u2551\u2551\u2563 \u2554\u2569\u2566\u255d\n\u255a\u2550\u255d\u255a\u2569 \u2569\u255a\u2550\u2569 \u2569\u2550\u2569\u255d\u255a\u2550\u255d\u2569 \u255a\u2550\n\nharmonica.py\n\n6 SAR Harmonica\n\nIndicators:\n\n### Parabolic SAR Setup:\n- The bot calculates 6 different Parabolic SAR values, each with a different scalar to adjust \n  the sensitivity of the SAR indicator. The SAR indicator helps track price trends and detect \n  potential reversals.\n\n### Exponential Moving Averages (EMA):\n- The strategy uses 4 different EMA values with varying periods (10, 60, and 90) to smooth out \n  price data and identify the overall trend direction.\n\nStrategy:\n\n- **Sell** conditions:\n    1. If the majority of SAR values are above the signal EMA, indicating a bearish trend.\n    2. If the price has increased significantly, with a certain threshold set for the SAR relative to the trade price.\n    3. If other bearish indicators are present, such as a bearish moving average crossing\n\n- **Buy** conditions:\n    1. If the majority of SAR values are below the signal EMA, indicating a bullish trend.\n    2. If the price is trending upwards, confirmed by a bullish moving average crossing.\n    3. The bot will only buy if the portfolio has sufficient USD balance to make the trade.\n\"\"\"\nimport math\nimport time\n\nimport numpy as np\nimport qtradex as qx\n\n\nclass ParabolicSARBot(qx.BaseBot):\n    def __init__(self):\n        # Parameters for the SAR and moving averages\n        self.tune = {\n            # SAR params\n            \"SAR_initial\": 0.02005274490409851,\n            \"SAR_acceleration\": 0.2300077824125609,\n            # SAR scalars\n            \"scalar_1\": 1.0,\n            \"scalar_2\": 2.0,\n            \"scalar_3\": 3.0,\n            \"scalar_4\": 4.0,\n            \"scalar_5\": 5.0,\n            \"scalar_6\": 6.0,\n            \"scalar_7\": 7.0,\n            \"scalar_9\": 8.0,\n            \"scalar_10\": 9.0,\n            # EMA period\n            \"signal_period\": 2.0,\n            # Integer\n            \"ago\": 1,\n            \"sell\": 5,\n            \"buy\": 5,\n\n        }\n\n        self.clamps = [\n            # min, max, strength\n            # sar initial + acceleration\n            [0.001, 1.0, 0.5],\n            [0.001, 1.0, 0.5],\n            # sar scalars\n            [1, 200, 1],\n            [1, 200, 1],\n            [1, 200, 1],\n            [1, 200, 1],\n            [1, 200, 1],\n            [1, 200, 1],\n            [1, 200, 1],\n            [1, 200, 1],\n            [1, 200, 1],\n            [1, 200, 1],\n  \n            [2, 30, 0.5],\n            [1, 100, 1],\n\n            [1, 10, 1],\n            [1, 10, 1],\n        ]\n\n        # Initialize storage for trade details\n        self.storage = {\"hold\": 0}\n\n    def reset(self):\n        self.storage = {\"hold\": 0}\n\n\n    def indicators(self, data):\n        \"\"\"\n        Calculate the Parabolic SAR and moving averages for strategy.\n        \"\"\"\n        # Calculate the SAR values for different scalars using self.tune\n        sars = np.array(\n            [\n                qx.tu.psar(\n                    data[\"high\"],\n                    data[\"low\"],\n                    self.tune[\"SAR_initial\"] / self.tune[f\"scalar_{h}\"],\n                    self.tune[\"SAR_acceleration\"] / self.tune[f\"scalar_{h}\"],\n                )\n                for h in range(1, 8)  # Iterates over scalars 1 to 7\n            ]\n        ).T\n\n        # Calculate the signal (simple moving average of close prices)\n        signal = qx.float_period(qx.tu.ema, (data[\"close\"], self.tune[\"signal_period\"]), (1,))\n\n        return {\n            \"sars\": sars[self.tune[\"ago\"]:],\n            \"signal\": signal[self.tune[\"ago\"]:],\n        }\n\n    def plot(self, *args):\n        qx.plot(*args, \n            (\n                (\"sars\", \"SARs\", \"teal\", 0, \"SAR Harmonica\"),\n                (\"signal\", \"Signal\", \"tomato\", 0, \"SAR Harmonica\"),\n            )\n        )\n\n    def strategy(self, state, indicators):\n        \"\"\"\n        Main strategy for handling buy/sell actions based on indicators.\n        \"\"\"\n        sars = indicators[\"sars\"]\n        signal = indicators[\"signal\"]\n\n        market = sum(1 for sar in sars if sar < signal)\n\n        if market < self.tune[\"sell\"]:\n\n            return qx.Sell()\n\n\n        if market > self.tune[\"buy\"]:\n\n            return qx.Buy()\n\n        # Otherwise, do nothing\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_gross\",\n            \"sortino_ratio\",\n            \"trade_win_rate\",\n        ], {}\n\n\n# Main execution to backtest the bot\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2018-01-01\",\n        #end=\"2025-01-01\",\n    )\n    asset, currency = \"BTS\", \"HONEST.MONEY\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"bitshares\",\n        asset=asset,\n        currency=currency,\n        begin=\"2023-01-01\",\n        end=\"2025-01-01\",\n        pool=\"1.19.305\"\n    )\n    bot = ParabolicSARBot()\n    try:\n        bot.tune = qx.load_tune(bot, \"BEST ROI TUNE\")\n    except:\n        print(\"Failed to load tune\")\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 20:14:50 2025": {
+  "tune": {
+   "SAR_initial": 0.020458909732161804,
+   "SAR_acceleration": 0.22614240048215228,
+   "scalar_1": 1.0,
+   "scalar_2": 2.0,
+   "scalar_3": 3.0395494359287203,
+   "scalar_4": 4.038637981441097,
+   "scalar_5": 5.071566972274526,
+   "scalar_6": 6.035073628061401,
+   "scalar_7": 7.004367218383351,
+   "scalar_9": 7.935182264032538,
+   "scalar_10": 9.0,
+   "signal_period": 2.0,
+   "ago": 1,
+   "sell": 7,
+   "buy": 5
+  },
+  "results": {
+   "roi": 3.2758589677561294,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5714285714285714
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 20:14:50 2025": {
+  "tune": {
+   "SAR_initial": 0.02005274490409851,
+   "SAR_acceleration": 0.2300077824125609,
+   "scalar_1": 1.0,
+   "scalar_2": 2.0,
+   "scalar_3": 3.0,
+   "scalar_4": 4.0,
+   "scalar_5": 5.0,
+   "scalar_6": 6.0,
+   "scalar_7": 7.0,
+   "scalar_9": 8.0,
+   "scalar_10": 9.0,
+   "signal_period": 2.0,
+   "ago": 1,
+   "sell": 5,
+   "buy": 5
+  },
+  "results": {
+   "roi": 2.4477942630575287,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.45454545454545453
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 20:14:50 2025": {
+  "tune": {
+   "SAR_initial": 0.020458909732161804,
+   "SAR_acceleration": 0.22614240048215228,
+   "scalar_1": 1.0,
+   "scalar_2": 2.0,
+   "scalar_3": 3.0395494359287203,
+   "scalar_4": 4.038637981441097,
+   "scalar_5": 5.071566972274526,
+   "scalar_6": 6.035073628061401,
+   "scalar_7": 7.004367218383351,
+   "scalar_9": 7.935182264032538,
+   "scalar_10": 9.0,
+   "signal_period": 2.0,
+   "ago": 1,
+   "sell": 7,
+   "buy": 5
+  },
+  "results": {
+   "roi": 3.611822658858096,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.512987012987013
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 20:16:35 2025": {
+  "tune": {
+   "SAR_initial": 0.021055396743631834,
+   "SAR_acceleration": 0.22509061000812536,
+   "scalar_1": 1.0264295523219444,
+   "scalar_2": 2.0465721148404548,
+   "scalar_3": 3.072224051151923,
+   "scalar_4": 4.148973772928539,
+   "scalar_5": 5.032292261550546,
+   "scalar_6": 6.14966346298508,
+   "scalar_7": 7.013905703369208,
+   "scalar_9": 8.11144122612733,
+   "scalar_10": 8.648274630977255,
+   "signal_period": 2.039949230624025,
+   "ago": 1,
+   "sell": 3,
+   "buy": 4
+  },
+  "results": {
+   "roi": 2.662065475567905,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.4857142857142857
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 20:16:35 2025": {
+  "tune": {
+   "SAR_initial": 0.020458909732161804,
+   "SAR_acceleration": 0.22614240048215228,
+   "scalar_1": 1.0,
+   "scalar_2": 2.0,
+   "scalar_3": 3.0395494359287203,
+   "scalar_4": 4.038637981441097,
+   "scalar_5": 5.071566972274526,
+   "scalar_6": 6.035073628061401,
+   "scalar_7": 7.004367218383351,
+   "scalar_9": 7.935182264032538,
+   "scalar_10": 9.0,
+   "signal_period": 2.0,
+   "ago": 1,
+   "sell": 7,
+   "buy": 5
+  },
+  "results": {
+   "roi": 1.3807383498998718,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.323943661971831
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 20:16:35 2025": {
+  "tune": {
+   "SAR_initial": 0.021703283321670833,
+   "SAR_acceleration": 0.22509061000812536,
+   "scalar_1": 1.0264295523219444,
+   "scalar_2": 1.9952448651551282,
+   "scalar_3": 2.9846121356612807,
+   "scalar_4": 4.148973772928539,
+   "scalar_5": 5.032292261550546,
+   "scalar_6": 6.14966346298508,
+   "scalar_7": 7.013905703369208,
+   "scalar_9": 8.11144122612733,
+   "scalar_10": 8.648274630977255,
+   "signal_period": 2.039949230624025,
+   "ago": 1,
+   "sell": 3,
+   "buy": 4
+  },
+  "results": {
+   "roi": 2.5327241796443722,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.49999999999999994
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 21:42:35 2025": {
+  "tune": {
+   "SAR_initial": 0.019399388167568643,
+   "SAR_acceleration": 0.27253437704128325,
+   "scalar_1": 1.0747627235143595,
+   "scalar_2": 4.5629236186700135,
+   "scalar_3": 2.173943464015639,
+   "scalar_4": 5.432454092920617,
+   "scalar_5": 5.670471063147058,
+   "scalar_6": 5.654454333170609,
+   "scalar_7": 6.744877797260772,
+   "scalar_9": 10.809888447381109,
+   "scalar_10": 9.936694809024322,
+   "signal_period": 1.8684136312481598,
+   "ago": 2,
+   "sell": 2,
+   "buy": 3
+  },
+  "results": {
+   "roi": 2.6665579106991,
+   "sortino_ratio": 0.0,
+   "trade_win_rate": 0.44999999999999996
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:42:35 2025": {
+  "tune": {
+   "SAR_initial": 0.020458909732161804,
+   "SAR_acceleration": 0.22614240048215228,
+   "scalar_1": 1.0,
+   "scalar_2": 2.0,
+   "scalar_3": 3.0395494359287203,
+   "scalar_4": 4.038637981441097,
+   "scalar_5": 5.071566972274526,
+   "scalar_6": 6.035073628061401,
+   "scalar_7": 7.004367218383351,
+   "scalar_9": 7.935182264032538,
+   "scalar_10": 9.0,
+   "signal_period": 2.0,
+   "ago": 1,
+   "sell": 7,
+   "buy": 5
+  },
+  "results": {
+   "roi": 1.1244023289389942,
+   "sortino_ratio": 0.0,
+   "trade_win_rate": 0.3067605633802817
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:42:35 2025": {
+  "tune": {
+   "SAR_initial": 0.02119983431441427,
+   "SAR_acceleration": 0.25211444667587096,
+   "scalar_1": 1.0,
+   "scalar_2": 2.1014220540548916,
+   "scalar_3": 2.8538586790492606,
+   "scalar_4": 4.323077586610882,
+   "scalar_5": 4.3199236918614385,
+   "scalar_6": 5.72666650234805,
+   "scalar_7": 7.589601393442851,
+   "scalar_9": 7.466463214120737,
+   "scalar_10": 9.307088562520045,
+   "signal_period": 1.872750853234832,
+   "ago": 7,
+   "sell": 2,
+   "buy": 4
+  },
+  "results": {
+   "roi": 2.040574603628926,
+   "sortino_ratio": 0.0,
+   "trade_win_rate": 0.5042880884144292
+  }
+ },
+ "BEST ROI TUNE_Thu Mar 27 00:24:52 2025": {
+  "tune": {
+   "SAR_initial": 0.10081583296885935,
+   "SAR_acceleration": 0.5876374156181581,
+   "scalar_1": 1.593419748032302,
+   "scalar_2": 1.1915236977812684,
+   "scalar_3": 2.098096126413245,
+   "scalar_4": 12.615184452248844,
+   "scalar_5": 8.936880049212693,
+   "scalar_6": 4.725874401127632,
+   "scalar_7": 21.279412490220906,
+   "scalar_9": 1.5829238226101416,
+   "scalar_10": 4.150108049142349,
+   "signal_period": 1.0,
+   "ago": 30,
+   "sell": 1,
+   "buy": 6
+  },
+  "results": {
+   "roi": 2.1137875338329724,
+   "sortino_ratio": 0.0,
+   "trade_win_rate": 0.36070376967732243
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Thu Mar 27 00:24:52 2025": {
+  "tune": {
+   "SAR_initial": 0.020458909732161804,
+   "SAR_acceleration": 0.22614240048215228,
+   "scalar_1": 1.0,
+   "scalar_2": 2.0,
+   "scalar_3": 3.0395494359287203,
+   "scalar_4": 4.038637981441097,
+   "scalar_5": 5.071566972274526,
+   "scalar_6": 6.035073628061401,
+   "scalar_7": 7.004367218383351,
+   "scalar_9": 7.935182264032538,
+   "scalar_10": 9.0,
+   "signal_period": 2.0,
+   "ago": 1,
+   "sell": 7,
+   "buy": 5
+  },
+  "results": {
+   "roi": 0.923674962057116,
+   "sortino_ratio": 0.0,
+   "trade_win_rate": 0.21670916122679798
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Thu Mar 27 00:24:52 2025": {
+  "tune": {
+   "SAR_initial": 0.004154036053578584,
+   "SAR_acceleration": 0.8428642354865783,
+   "scalar_1": 77.71869165584376,
+   "scalar_2": 2.0075683413401078,
+   "scalar_3": 3.4555019480018747,
+   "scalar_4": 15.197229201117032,
+   "scalar_5": 30.83144538544359,
+   "scalar_6": 1.3413543621824284,
+   "scalar_7": 11.034756080402227,
+   "scalar_9": 50.200899015140145,
+   "scalar_10": 1.6701337423078355,
+   "signal_period": 1.2263586621809537,
+   "ago": 31,
+   "sell": 1,
+   "buy": 1
+  },
+  "results": {
+   "roi": 1.5950737888026811,
+   "sortino_ratio": 0.0,
+   "trade_win_rate": 0.48029774314194
+  }
+ }
+}

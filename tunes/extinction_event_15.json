@@ -1,0 +1,489 @@
+{
+ "source": "\"\"\"\n\u2554\u2550\u2557\u2554\u2566\u2557\u2566\u2550\u2557\u2554\u2550\u2557\u2554\u2566\u2557\u2554\u2550\u2557\u2550\u2557 \u2566\n\u2551\u2550\u256c\u2557\u2551 \u2560\u2566\u255d\u2560\u2550\u2563 \u2551\u2551\u2551\u2563 \u2554\u2569\u2566\u255d\n\u255a\u2550\u255d\u255a\u2569 \u2569\u255a\u2550\u2569 \u2569\u2550\u2569\u255d\u255a\u2550\u255d\u2569 \u255a\u2550\n\nextinction_event.py\n\nIndicators;\n\n    - ma1, ma2, ma3: Exponential Moving Averages (EMAs) with different periods\n    - support: A support level based on a weighted combination of `ma1` and `ma2`\n    - selloff: A selloff threshold based on a weighted combination of `ma1` and `ma2`\n    - despair: A despair level based on a weighted combination of `ma1` and `ma2`\n    - resistance: A resistance level based on a weighted combination of `ma1` and `ma2`\n    - trend: The current market trend, which can be 'bull', 'bear', or None\n    - buying: A calculated buying price based on the current trend and indicators\n    - selling: A calculated selling price based on the current trend and indicators\n    - override: Overrides the default behavior with 'buy' or 'sell' signals when a trend shift occurs\n\n\nStrategy:\n\n    Trending:\n\n    - when the low price is first above the long average a qx.Buy is initiated indicating end of the Bear market\n    - when the high price is first below the long average a qx.Sell is initiated indicating end of the Bull market\n\n    Channeled:\n\n    - During Bull Market a trading channel is defined by support and selloff\n    - During Bear Market a trading channel is defined by despair and resistance\n    \"\"\"\n\nimport time\n\nimport numpy as np\nimport qtradex as qx\n\n\nclass ExtinctionEvent(qx.BaseBot):\n    def __init__(self):\n        self.tune = {\n            \"ma1_period\": 5.8,\n            \"ma2_period\": 15.0,\n            \"ma3_period\": 30.0,\n            \"selloff ma1\": 1.1,\n            \"selloff ma2\": 1.1,\n            \"selloff ratio\": 0.5,\n            \"support ma1\": 1.0,\n            \"support ma2\": 1.0,\n            \"support ratio\": 0.5,\n            \"resistance ma1\": 1.0,\n            \"resistance ma2\": 1.0,\n            \"resistance ratio\": 0.5,\n            \"despair ma1\": 0.9,\n            \"despair ma2\": 0.9,\n            \"despair ratio\": 0.5,\n        }\n\n        self.clamps = [\n            [5, 100, 0.5],\n            [5, 100, 0.5],\n            [5, 100, 0.5],\n            [0.9, 1.2, 0.5],\n            [0.9, 1.2, 0.5],\n            [0.25, 0.75, 0.5],\n            [0.9, 1.2, 0.5],\n            [0.9, 1.2, 0.5],\n            [0.25, 0.75, 0.5],\n            [0.9, 1.2, 0.5],\n            [0.9, 1.2, 0.5],\n            [0.25, 0.75, 0.5],\n            [0.9, 1.2, 0.5],\n            [0.9, 1.2, 0.5],\n            [0.25, 0.75, 0.5],\n        ]\n\n\n    def indicators(self, data):\n        metrics = {\n            tag.split(\"_\")[0]: qx.float_period(qx.tu.ema, (data[\"close\"], self.tune[tag]), (1,))\n            for tag in [\"ma1_period\", \"ma2_period\", \"ma3_period\"]\n        }\n        metrics[\"support\"] = []\n        metrics[\"selloff\"] = []\n        metrics[\"despair\"] = []\n        metrics[\"resistance\"] = []\n        metrics[\"trend\"] = []\n        metrics[\"buying\"] = []\n        metrics[\"selling\"] = []\n        metrics[\"override\"] = []\n\n        trend = None\n\n        for ma1, ma2, ma3, low, high in zip(\n            metrics[\"ma1\"], metrics[\"ma2\"], metrics[\"ma3\"], data[\"low\"], data[\"high\"]\n        ):\n            metrics[\"support\"].append(\n                ma1 * self.tune[\"support ma1\"] * self.tune[\"support ratio\"]\n                + ma2 * self.tune[\"support ma2\"] * (1 - self.tune[\"support ratio\"])\n            )\n            metrics[\"selloff\"].append(\n                ma1 * self.tune[\"selloff ma1\"] * self.tune[\"selloff ratio\"]\n                + ma2 * self.tune[\"selloff ma2\"] * (1 - self.tune[\"selloff ratio\"])\n            )\n            metrics[\"despair\"].append(\n                ma1 * self.tune[\"despair ma1\"] * self.tune[\"despair ratio\"]\n                + ma2 * self.tune[\"despair ma2\"] * (1 - self.tune[\"despair ratio\"])\n            )\n            metrics[\"resistance\"].append(\n                ma1 * self.tune[\"resistance ma1\"] * self.tune[\"resistance ratio\"]\n                + ma2\n                * self.tune[\"resistance ma2\"]\n                * (1 - self.tune[\"resistance ratio\"])\n            )\n\n            if low > ma3 and trend != \"bull\":\n                trend = \"bull\"\n                metrics[\"override\"].append(\"buy\")\n            elif high < ma3 and trend != \"bear\":\n                trend = \"bear\"\n                metrics[\"override\"].append(\"sell\")\n            else:\n                metrics[\"override\"].append(None)\n\n            if trend is None:\n                metrics[\"buying\"].append(metrics[\"ma3\"][-1] / 2)\n                metrics[\"selling\"].append(metrics[\"ma3\"][-1] * 2)\n            elif trend == \"bull\":\n                metrics[\"buying\"].append(metrics[\"support\"][-1])\n                metrics[\"selling\"].append(metrics[\"selloff\"][-1])\n            elif trend == \"bear\":\n                metrics[\"buying\"].append(metrics[\"despair\"][-1])\n                metrics[\"selling\"].append(metrics[\"resistance\"][-1])\n            else:\n                raise RuntimeError\n\n            metrics[\"trend\"].append(trend)\n\n        return metrics\n\n    def plot(self, data, states, indicators, block):\n        axes = qx.plot(\n            data,\n            states,\n            indicators,\n            False,\n            (\n                # key, name, color, index, title\n                (\"ma3\", \"LONG\", \"white\", 0, \"Extinction Event\"),\n            ),\n        )\n\n        axes[0].fill_between(\n            states[\"unix\"],\n            indicators[\"selloff\"],\n            indicators[\"support\"],\n            color=\"lime\",\n            alpha=0.3,\n            where=[i == \"bull\" for i in indicators[\"trend\"]],\n            label=\"Support/Selloff\",\n        )\n\n        axes[0].fill_between(\n            states[\"unix\"],\n            indicators[\"resistance\"],\n            indicators[\"despair\"],\n            color=\"tomato\",\n            alpha=0.4,\n            where=qx.expand_bools([i == \"bear\" for i in indicators[\"trend\"]]),\n            label=\"Resistance/Despair\",\n        )\n\n        axes[0].legend()\n        qx.plotmotion(block)\n\n    def strategy(self, tick_info, indicators):\n        if indicators[\"override\"] == \"buy\" and isinstance(\n            tick_info[\"last_trade\"], (qx.Sell, qx.Thresholds)\n        ):\n            ret = qx.Buy()\n        elif indicators[\"override\"] == \"sell\" and isinstance(\n            tick_info[\"last_trade\"], (qx.Buy, qx.Thresholds)\n        ):\n            ret = qx.Sell()\n        else:\n            ret = qx.Thresholds(buying=indicators[\"buying\"], selling=indicators[\"selling\"])\n        return ret\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_assets\",\n            \"roi_currency\",\n            \"roi\",\n            \"cagr\",\n            \"sortino\",\n            \"maximum_drawdown\",\n            \"trade_win_rate\",\n        ], {}\n\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2023-01-01\",\n    )\n    bot = ExtinctionEvent()\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI_ASSETS TUNE_Wed Mar 26 20:33:14 2025": {
+  "tune": {
+   "ma1_period": 4.999999989808172,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 13.185303419161475,
+   "roi_currency": 43.13150191896167,
+   "roi": 23.849044049908336,
+   "cagr": 4.952436493792887,
+   "maximum_drawdown": -0.9616852771023243,
+   "trade_win_rate": 0.8287461773700305
+  }
+ },
+ "BEST ROI_CURRENCY TUNE_Wed Mar 26 20:33:14 2025": {
+  "tune": {
+   "ma1_period": 4.999999989808172,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 13.187041414952905,
+   "roi_currency": 43.12580474406083,
+   "roi": 23.849044049908336,
+   "cagr": 4.952436493792887,
+   "maximum_drawdown": -0.9616852771023243,
+   "trade_win_rate": 0.8287461773700305
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 20:33:14 2025": {
+  "tune": {
+   "ma1_period": 4.999999989808172,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 13.187041414952905,
+   "roi_currency": 43.13150191896167,
+   "roi": 23.845897323100132,
+   "cagr": 4.952436493792887,
+   "maximum_drawdown": -0.9616852771023243,
+   "trade_win_rate": 0.8287461773700305
+  }
+ },
+ "BEST CAGR TUNE_Wed Mar 26 20:33:14 2025": {
+  "tune": {
+   "ma1_period": 4.999999989808172,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 13.187041414952905,
+   "roi_currency": 43.13150191896167,
+   "roi": 23.849044049908336,
+   "cagr": 4.95199387396033,
+   "maximum_drawdown": -0.9616852771023243,
+   "trade_win_rate": 0.8287461773700305
+  }
+ },
+ "BEST MAXIMUM_DRAWDOWN TUNE_Wed Mar 26 20:33:15 2025": {
+  "tune": {
+   "ma1_period": 4.9955111643241175,
+   "ma2_period": 13.484727735377895,
+   "ma3_period": 32.863429268834395,
+   "selloff ma1": 0.905831153100894,
+   "selloff ma2": 1.171640374857286,
+   "selloff ratio": 0.5335680577831649,
+   "support ma1": 1.0233378694127906,
+   "support ma2": 0.9889039512002913,
+   "support ratio": 0.6072158839940156,
+   "resistance ma1": 0.9070648400870877,
+   "resistance ma2": 1.0660555293824243,
+   "resistance ratio": 0.6443616011327216,
+   "despair ma1": 0.9202845690506083,
+   "despair ma2": 1.0330936054842348,
+   "despair ratio": 0.5646100403945934
+  },
+  "results": {
+   "roi_assets": 0.5065321694088771,
+   "roi_currency": 1.65673956344004,
+   "roi": 0.9160741701493387,
+   "cagr": -0.04810367542725891,
+   "maximum_drawdown": -0.28273842206238115,
+   "trade_win_rate": 0.5152224824355972
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 20:33:15 2025": {
+  "tune": {
+   "ma1_period": 4.999111973251334,
+   "ma2_period": 13.338176321581898,
+   "ma3_period": 32.622610662110034,
+   "selloff ma1": 0.9456183536741485,
+   "selloff ma2": 1.142025435134903,
+   "selloff ratio": 0.5189085161741169,
+   "support ma1": 0.9660185168666335,
+   "support ma2": 1.0727668878423113,
+   "support ratio": 0.5526440013929337,
+   "resistance ma1": 0.9660414373616513,
+   "resistance ma2": 1.0540982592297163,
+   "resistance ratio": 0.6121427644468785,
+   "despair ma1": 0.9213936912940988,
+   "despair ma2": 1.024770723008289,
+   "despair ratio": 0.5440083400072482
+  },
+  "results": {
+   "roi_assets": 6.53801267607185,
+   "roi_currency": 21.384198123806062,
+   "roi": 11.824134573027994,
+   "cagr": 3.0117093192340034,
+   "maximum_drawdown": -0.9354236188977066,
+   "trade_win_rate": 0.8451467030240828
+  }
+ },
+ "BEST ROI_ASSETS TUNE_Wed Mar 26 21:31:34 2025": {
+  "tune": {
+   "ma1_period": 4.999999994904086,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 13.187041414952905,
+   "roi_currency": 43.13150191896167,
+   "roi": 23.849044049908336,
+   "cagr": 4.952436493792887,
+   "maximum_drawdown": -0.9616852771023243,
+   "trade_win_rate": 0.8287461773700305
+  }
+ },
+ "BEST ROI_CURRENCY TUNE_Wed Mar 26 21:31:34 2025": {
+  "tune": {
+   "ma1_period": 4.999999994904086,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 13.187041414952905,
+   "roi_currency": 43.13150191896167,
+   "roi": 23.849044049908336,
+   "cagr": 4.952436493792887,
+   "maximum_drawdown": -0.9616852771023243,
+   "trade_win_rate": 0.8287461773700305
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 21:31:34 2025": {
+  "tune": {
+   "ma1_period": 4.999999994904086,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 13.187041414952905,
+   "roi_currency": 43.13150191896167,
+   "roi": 23.849044049908336,
+   "cagr": 4.952436493792887,
+   "maximum_drawdown": -0.9616852771023243,
+   "trade_win_rate": 0.8287461773700305
+  }
+ },
+ "BEST CAGR TUNE_Wed Mar 26 21:31:34 2025": {
+  "tune": {
+   "ma1_period": 4.999999994904086,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 13.187041414952905,
+   "roi_currency": 43.13150191896167,
+   "roi": 23.849044049908336,
+   "cagr": 4.952436493792887,
+   "maximum_drawdown": -0.9616852771023243,
+   "trade_win_rate": 0.8287461773700305
+  }
+ },
+ "BEST MAXIMUM_DRAWDOWN TUNE_Wed Mar 26 21:31:34 2025": {
+  "tune": {
+   "ma1_period": 4.9999999974520435,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1179398058606227,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 1.0069883383004588,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6246759722808538,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 6.18077540806097,
+   "roi_currency": 20.21576470300369,
+   "roi": 11.178063398078944,
+   "cagr": 2.8869167137077976,
+   "maximum_drawdown": -0.9262884921056351,
+   "trade_win_rate": 0.7855153203342619
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:31:34 2025": {
+  "tune": {
+   "ma1_period": 4.9999999974520435,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1549692360000916,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 1.02020512320781,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6267774559967259,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 10.520907565782169,
+   "roi_currency": 34.411247419622406,
+   "roi": 19.0272844443212,
+   "cagr": 4.242352856352563,
+   "maximum_drawdown": -0.9523656083200697,
+   "trade_win_rate": 0.8317988044584188
+  }
+ },
+ "BEST ROI_ASSETS TUNE_Wed Mar 26 22:59:12 2025": {
+  "tune": {
+   "ma1_period": 4.999999994904086,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 8.821758285692251,
+   "roi_currency": 28.85375668847933,
+   "roi": 15.954336938272949,
+   "cagr": 3.31304015045729,
+   "maximum_drawdown": -0.6433402910137122,
+   "trade_win_rate": 0.5544077876831298
+  }
+ },
+ "BEST ROI_CURRENCY TUNE_Wed Mar 26 22:59:12 2025": {
+  "tune": {
+   "ma1_period": 4.999999994904086,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 8.821758285692251,
+   "roi_currency": 28.85375668847933,
+   "roi": 15.954336938272949,
+   "cagr": 3.31304015045729,
+   "maximum_drawdown": -0.6433402910137122,
+   "trade_win_rate": 0.5544077876831298
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 22:59:12 2025": {
+  "tune": {
+   "ma1_period": 4.999999994904086,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 8.821758285692251,
+   "roi_currency": 28.85375668847933,
+   "roi": 15.954336938272949,
+   "cagr": 3.31304015045729,
+   "maximum_drawdown": -0.6433402910137122,
+   "trade_win_rate": 0.5544077876831298
+  }
+ },
+ "BEST CAGR TUNE_Wed Mar 26 22:59:12 2025": {
+  "tune": {
+   "ma1_period": 4.999999994904086,
+   "ma2_period": 13.17192266671372,
+   "ma3_period": 32.96630748426317,
+   "selloff ma1": 0.9202118092467539,
+   "selloff ma2": 1.1481692840571829,
+   "selloff ratio": 0.5486417324249441,
+   "support ma1": 0.9978766264465679,
+   "support ma2": 0.9907575952894692,
+   "support ratio": 0.6007024298440187,
+   "resistance ma1": 0.9530700815198675,
+   "resistance ma2": 1.061021939772319,
+   "resistance ratio": 0.6289378902754914,
+   "despair ma1": 0.9242268705448156,
+   "despair ma2": 1.0104176552722,
+   "despair ratio": 0.5401210956438841
+  },
+  "results": {
+   "roi_assets": 8.821758285692251,
+   "roi_currency": 28.85375668847933,
+   "roi": 15.954336938272949,
+   "cagr": 3.31304015045729,
+   "maximum_drawdown": -0.6433402910137122,
+   "trade_win_rate": 0.5544077876831298
+  }
+ },
+ "BEST MAXIMUM_DRAWDOWN TUNE_Wed Mar 26 22:59:12 2025": {
+  "tune": {
+   "ma1_period": 44.450257489937435,
+   "ma2_period": 5.563471551358714,
+   "ma3_period": 98.92705488371635,
+   "selloff ma1": 0.9953172426166238,
+   "selloff ma2": 1.1890946925984514,
+   "selloff ratio": 0.5858388543689824,
+   "support ma1": 1.0377878801199882,
+   "support ma2": 1.0453155032948134,
+   "support ratio": 0.35247482363649796,
+   "resistance ma1": 0.8999312850337435,
+   "resistance ma2": 0.9982534570665852,
+   "resistance ratio": 0.4280491621691062,
+   "despair ma1": 0.9681489183747336,
+   "despair ma2": 0.9424166838886016,
+   "despair ratio": 0.41141921912913343
+  },
+  "results": {
+   "roi_assets": 0.5354069841557424,
+   "roi_currency": 1.1490539850976296,
+   "roi": 0.7843542113058739,
+   "cagr": -0.01598016812414681,
+   "maximum_drawdown": -0.1864635906829001,
+   "trade_win_rate": 0.5131242534881968
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 22:59:12 2025": {
+  "tune": {
+   "ma1_period": 58.88383869929107,
+   "ma2_period": 51.45360513057267,
+   "ma3_period": 49.64451272973869,
+   "selloff ma1": 0.9080897560787405,
+   "selloff ma2": 1.1098123414916674,
+   "selloff ratio": 0.4578393182689439,
+   "support ma1": 0.9353005369733549,
+   "support ma2": 1.111550625405621,
+   "support ratio": 0.5724879324904817,
+   "resistance ma1": 1.147904514246546,
+   "resistance ma2": 0.980863434446476,
+   "resistance ratio": 0.334724510749541,
+   "despair ma1": 0.9321282327185216,
+   "despair ma2": 0.9323064806182804,
+   "despair ratio": 0.2823335512811003
+  },
+  "results": {
+   "roi_assets": 0.4209371995577772,
+   "roi_currency": 1.4224341057075145,
+   "roi": 0.7737928850874711,
+   "cagr": -0.12048220557262233,
+   "maximum_drawdown": -0.43604108335121816,
+   "trade_win_rate": 0.7302662303316795
+  }
+ }
+}

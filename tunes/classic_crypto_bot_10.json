@@ -1,0 +1,60 @@
+{
+ "source": "import numpy as np\nimport qtradex as qx\n\n\nclass ClassicalCryptoBot(qx.BaseBot):\n    def __init__(self):\n        self.tune = {\n            \"sma_period\": 50.0,  # Period for Simple Moving Average (SMA)\n            \"ema_period\": 20.0,  # Period for Exponential Moving Average (EMA)\n            \"rsi_period\": 14.0,  # Period for Relative Strength Index (RSI)\n            \"stoch_k_period\": 14.0,  # Period for Stochastic Oscillator\n            \"stoch_kslow_period\": 14.0,  # Period for Stochastic Oscillator\n            \"stoch_d_period\": 14.0,  # Period for Stochastic Oscillator\n            \"adx_period\": 14.0,  # Period for ADX (Average Directional Index)\n            \"crossover_threshold\": 2,  # Threshold for crossover-based strategy\n            \"buy_threshold\": 4,  # Number of conditions for a buy signal\n            \"sell_threshold\": 4,  # Number of conditions for a sell signal\n        }\n\n        self.clamps = [\n            [5, 100, 0.5],  # For SMA period\n            [5, 100, 0.5],  # For EMA period\n            [5, 50, 0.5],  # For RSI period\n            [5, 50, 0.5],  # For Stochastic period\n            [5, 50, 0.5],  # For Stochastic period\n            [5, 50, 0.5],  # For Stochastic period\n            [5, 50, 0.5],  # For ADX period\n            [1, 5, 0.5],  # For cross threshold\n            [1, 5, 0.5],  # For buy threshold\n            [1, 5, 0.5],  # For sell threshold\n        ]\n\n    def indicators(self, data):\n        \"\"\"\n        Calculate the classical indicators for the strategy.\n        \"\"\"\n        # Simple Moving Average (SMA)\n        sma = qx.float_period(qx.tu.sma, (data[\"close\"], self.tune[\"sma_period\"]), (1,))\n        \n        # Exponential Moving Average (EMA)\n        ema = qx.float_period(qx.tu.ema, (data[\"close\"], self.tune[\"ema_period\"]), (1,))\n        \n        # Relative Strength Index (RSI)\n        rsi = qx.float_period(qx.tu.rsi, (data[\"close\"], self.tune[\"rsi_period\"]), (1,))\n        \n        # Stochastic Oscillator (Stoch)\n        stoch_k, stoch_d = qx.float_period(qx.tu.stoch, (data[\"high\"], data[\"low\"], data[\"close\"], self.tune[\"stoch_k_period\"], self.tune[\"stoch_kslow_period\"], self.tune[\"stoch_d_period\"]), (3,))\n        \n        # Average Directional Index (ADX)\n        adx = qx.float_period(qx.tu.adx, (data[\"high\"], data[\"low\"], data[\"close\"], self.tune[\"adx_period\"]), (3,))\n\n        return {\n            \"sma\": sma,\n            \"ema\": ema,\n            \"rsi\": rsi,\n            \"stoch_k\": stoch_k,\n            \"stoch_d\": stoch_d,\n            \"adx\": adx,\n        }\n\n    def plot(self, *args):\n        \"\"\"\n        Plot indicators for visual analysis.\n        \"\"\"\n        qx.plot(\n            *args,\n            (\n                (\"sma\", \"SMA\", \"yellow\", 0, \"Trend\"),\n                (\"ema\", \"EMA\", \"blue\", 0, \"Trend\"),\n                (\"rsi\", \"RSI\", \"green\", 1, \"Momentum\"),\n                (\"stoch_k\", \"Stochastic K\", \"orange\", 1, \"Momentum\"),\n                (\"stoch_d\", \"Stochastic D\", \"purple\", 1, \"Momentum\"),\n                (\"adx\", \"ADX\", \"red\", 1, \"Trend Strength\"),\n            ),\n        )\n\n    def strategy(self, state, indicators):\n        \"\"\"\n        Define strategy based on the combination of classical indicators.\n        \"\"\"\n        if state[\"last_trade\"] is None:\n            # Enter market with all capital on the first trade\n            return qx.Buy()\n\n        # Buy Signal Criteria: Combining indicators for an entry signal\n        if (\n            sum(\n                [\n                    int(indicators[\"rsi\"] < 30),  # RSI below 30 (oversold)\n                    int(indicators[\"stoch_k\"] < 20),  # Stochastic K below 20 (oversold)\n                    int(indicators[\"sma\"] > indicators[\"ema\"]),  # SMA above EMA (bullish trend)\n                    int(indicators[\"adx\"] > 25),  # ADX above 25 (strong trend)\n                ]\n            )\n            >= self.tune[\"buy_threshold\"]\n        ):\n            if isinstance(state[\"last_trade\"], qx.Sell):\n                # Exit short position and enter long with all capital\n                return qx.Buy()\n\n        # Sell Signal Criteria: Combining indicators for an exit signal\n        if (\n            sum(\n                [\n                    int(indicators[\"rsi\"] > 70),  # RSI above 70 (overbought)\n                    int(indicators[\"stoch_k\"] > 80),  # Stochastic K above 80 (overbought)\n                    int(indicators[\"sma\"] < indicators[\"ema\"]),  # SMA below EMA (bearish trend)\n                    int(indicators[\"adx\"] > 25),  # ADX above 25 (strong trend)\n                ]\n            )\n            >= self.tune[\"sell_threshold\"]\n        ):\n            if isinstance(state[\"last_trade\"], qx.Buy):\n                # Exit long position and enter short with all capital\n                return qx.Sell()\n\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        \"\"\"\n        Measure fitness of the bot based on ROI, Sortino ratio, and win rate.\n        \"\"\"\n        return [\"roi_gross\", \"sortino_ratio\", \"trade_win_rate\"], {}\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2023-01-01\",\n    )\n\n    bot = ClassicalCryptoBot()\n\n    # Try to load the optimized tune parameters if available\n\n    # Start the bot with backtest data and wallet\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 21:06:23 2025": {
+  "tune": {
+   "sma_period": 52.70328018123311,
+   "ema_period": 19.882048415281087,
+   "rsi_period": 14.434442201548205,
+   "stoch_k_period": 14.22334352258946,
+   "stoch_kslow_period": 13.095967814113498,
+   "stoch_d_period": 16.680183347696932,
+   "adx_period": 11.886800623560138,
+   "crossover_threshold": 1,
+   "buy_threshold": 2,
+   "sell_threshold": 0
+  },
+  "results": {
+   "roi": 3.7293233937742905,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5479876160990712
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:06:23 2025": {
+  "tune": {
+   "sma_period": 52.59412344355676,
+   "ema_period": 19.582104612027774,
+   "rsi_period": 14.136510619162507,
+   "stoch_k_period": 14.401397507360407,
+   "stoch_kslow_period": 13.835230390612587,
+   "stoch_d_period": 13.751720106706024,
+   "adx_period": 13.382159482998574,
+   "crossover_threshold": 5,
+   "buy_threshold": 5,
+   "sell_threshold": 0
+  },
+  "results": {
+   "roi": 2.0158637624742766,
+   "sortino_ratio": 0.9658637624742765,
+   "trade_win_rate": 1.0
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:06:23 2025": {
+  "tune": {
+   "sma_period": 50.97019965382525,
+   "ema_period": 20.000716447171193,
+   "rsi_period": 13.648111134101777,
+   "stoch_k_period": 14.615123436100252,
+   "stoch_kslow_period": 13.95686780187734,
+   "stoch_d_period": 14.413692184866894,
+   "adx_period": 13.710072994984543,
+   "crossover_threshold": 2,
+   "buy_threshold": 5,
+   "sell_threshold": 1
+  },
+  "results": {
+   "roi": 1.9041191773802841,
+   "sortino_ratio": 0.8541191773802841,
+   "trade_win_rate": 1.0
+  }
+ }
+}

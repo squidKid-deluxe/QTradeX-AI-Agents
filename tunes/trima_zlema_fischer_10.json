@@ -1,0 +1,117 @@
+{
+ "source": "import time\n\nimport numpy as np\nimport qtradex as qx\n\n\nclass AdvancedBot(qx.BaseBot):\n    def __init__(self):\n        # Default tuning values (periods for ZLEMA, TRIMA, and Fisher Transform)\n        self.tune = {\n            # Periods for indicators\n            \"zlema_period\": 14.0,  # Period for Zero-Lag Exponential Moving Average (ZLEMA)\n            \"trima_period\": 14.0,  # Period for Triangular Moving Average (TRIMA)\n            \"fisher_period\": 14.0,  # Period for Fisher Transform\n            # Thresholds for Buy and Sell signals\n            \"buy_threshold\": 3,  # Number of conditions required to trigger a buy signal\n            \"sell_threshold\": 3,  # Number of conditions required to trigger a sell signal\n            # Derivative thresholds for momentum confirmation\n            \"zlema_d_threshold\": 0.0,  # Derivative threshold for ZLEMA\n            \"trima_d_threshold\": 0.0,  # Derivative threshold for TRIMA\n            \"fisher_d_threshold\": 0.0,  # Derivative threshold for Fisher Transform\n            # Threshold for ZLEMA > TRIMA (bullish) and ZLEMA < TRIMA (bearish)\n            \"zlema_trima_bear\": 0.0,  # Difference threshold between ZLEMA and TRIMA for confirmation\n            \"zlema_trima_bull\": 0.0,  # Difference threshold between ZLEMA and TRIMA for confirmation\n        }\n\n        # Optimizer clamps (min, max, strength)\n        self.clamps = [\n            [5, 50, 0.5],  # For ZLEMA Period\n            [5, 50, 0.5],  # For TRIMA Period\n            [5, 50, 0.5],  # For Fisher Transform Period\n            [1, 5, 1],  # Buy Threshold\n            [1, 5, 1],  # Sell Threshold\n            [-1, 1, 0.5],  # ZLEMA Derivative Threshold\n            [-1, 1, 0.5],  # TRIMA Derivative Threshold\n            [-1, 1, 0.5],  # Fisher Derivative Threshold\n            [0, 1, 0.5],  # ZLEMA > TRIMA Threshold (Bullish confirmation)\n            [0, 1, 0.5],  # ZLEMA < TRIMA Threshold (Bearish confirmation)\n            [0, 1, 0.5],  # ZLEMA < TRIMA Threshold (Bearish confirmation)\n        ]\n\n    def indicators(self, data):\n        \"\"\"\n        Calculate the indicators used in the strategy.\n        \"\"\"\n        # Zero-Lag Exponential Moving Average (ZLEMA)\n        zlema = qx.float_period(\n            qx.tu.zlema,\n            (data[\"close\"], self.tune[\"zlema_period\"]),\n            (1,)\n        )\n\n        # Derivative of Zero-Lag Exponential Moving Average (ZLEMA)\n        zlema_derivative = qx.derivative(zlema)\n\n        # Triangular Moving Average (TRIMA)\n        trima = qx.float_period(\n            qx.tu.trima,\n            (data[\"close\"], self.tune[\"trima_period\"]),\n            (1,)\n        )\n\n        # Derivative of Triangular Moving Average (TRIMA)\n        trima_derivative = qx.derivative(trima)\n\n        # Fisher Transform (FT)\n        fisher, fisher_signal = qx.float_period(\n            qx.tu.fisher,\n            (data[\"high\"], data[\"low\"], self.tune[\"fisher_period\"]),\n            (2,)\n        )\n\n        # Derivative of Fisher Transform (FT)\n        fisher_derivative = qx.derivative(fisher)\n\n        # Derivative of Fisher Signal\n        fisher_signal_derivative = qx.derivative(fisher_signal)\n\n        return {\n            \"zlema\": zlema,\n            \"trima\": trima,\n            \"fisher\": fisher,\n            \"fisher_signal\": fisher_signal,\n            \"zlema_derivative\": zlema_derivative,\n            \"trima_derivative\": trima_derivative,\n            \"fisher_derivative\": fisher_derivative,\n            \"fisher_signal_derivative\": fisher_signal_derivative,\n        }\n\n    def plot(self, *args):\n        \"\"\"\n        Plot indicators for visual analysis.\n        \"\"\"\n        qx.plot(\n            *args,\n            (\n                (\"zlema\", \"Zero-Lag EMA\", \"yellow\", 0, \"Smoothing\"),\n                (\"trima\", \"Triangular Moving Average\", \"green\", 0, \"Smoothing\"),\n                (\"fisher\", \"Fisher Transform\", \"blue\", 2, \"Reversal\"),\n                (\"fisher_signal\", \"Fisher Signal\", \"cyan\", 2, \"Reversal\"),\n                (\"zlema_derivative\", \"ZLEMA Derivative\", \"red\", 1, \"Momentum\"),\n                (\"trima_derivative\", \"TRIMA Derivative\", \"purple\", 1, \"Momentum\"),\n                (\"fisher_derivative\", \"Fisher Derivative\", \"orange\", 1, \"Momentum\"),\n                (\"fisher_signal_derivative\", \"Fisher Signal Derivative\", \"pink\", 1, \"Momentum\"),\n            ),\n        )\n\n    def strategy(self, state, indicators):\n        \"\"\"\n        Define strategy based on ZLEMA, TRIMA, and Fisher Transform with their derivatives.\n        \"\"\"\n        if state[\"last_trade\"] is None:\n            # Enter market with all capital on the first trade\n            return qx.Buy()\n\n        # Bullish Signal Criteria\n        if (\n            sum(\n                [\n                    int(indicators[\"zlema\"] > indicators[\"trima\"] + self.tune[\"zlema_trima_bull\"]),  # ZLEMA > TRIMA (Bullish)\n                    int(indicators[\"zlema_derivative\"] > self.tune[\"zlema_d_threshold\"]),  # Positive ZLEMA derivative\n                    int(indicators[\"trima_derivative\"] > self.tune[\"trima_d_threshold\"]),  # Positive TRIMA derivative\n                    int(indicators[\"fisher\"] > indicators[\"fisher_signal\"]),  # Fisher crossover (bullish)\n                    int(indicators[\"fisher_derivative\"] > self.tune[\"fisher_d_threshold\"]),  # Positive Fisher derivative\n                    int(indicators[\"fisher_signal_derivative\"] > self.tune[\"fisher_d_threshold\"]),  # Positive Fisher Signal derivative\n                ]\n            )\n            >= self.tune[\"buy_threshold\"]\n        ):\n            if isinstance(state[\"last_trade\"], qx.Sell):\n                # Exit short position and enter long with all capital\n                return qx.Buy()\n\n        # Bearish Signal Criteria\n        if (\n            sum(\n                [\n                    int(indicators[\"zlema\"] < indicators[\"trima\"] - self.tune[\"zlema_trima_bear\"]),  # ZLEMA < TRIMA (Bearish)\n                    int(indicators[\"zlema_derivative\"] < self.tune[\"zlema_d_threshold\"]),  # Negative ZLEMA derivative\n                    int(indicators[\"trima_derivative\"] < self.tune[\"trima_d_threshold\"]),  # Negative TRIMA derivative\n                    int(indicators[\"fisher\"] < indicators[\"fisher_signal\"]),  # Fisher crossover (bearish)\n                    int(indicators[\"fisher_derivative\"] < self.tune[\"fisher_d_threshold\"]),  # Negative Fisher derivative\n                    int(indicators[\"fisher_signal_derivative\"] < self.tune[\"fisher_d_threshold\"]),  # Negative Fisher Signal derivative\n                ]\n            )\n            >= self.tune[\"sell_threshold\"]\n        ):\n            if isinstance(state[\"last_trade\"], qx.Buy):\n                # Exit long position and enter short with all capital\n                return qx.Sell()\n\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        \"\"\"\n        Measure fitness of the bot based on ROI, Sortino ratio, and win rate.\n        \"\"\"\n        return [\"roi_gross\", \"sortino_ratio\", \"trade_win_rate\"], {}\n\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2023-01-01\",\n    )\n\n    bot = AdvancedBot()\n\n    # Start the bot with backtest data and wallet\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 21:00:27 2025": {
+  "tune": {
+   "zlema_period": 14.265620611950734,
+   "trima_period": 14.13373506822629,
+   "fisher_period": 13.711559184290078,
+   "buy_threshold": 1,
+   "sell_threshold": 3,
+   "zlema_d_threshold": -0.0003165122533948506,
+   "trima_d_threshold": 3.1816434687593444e-05,
+   "fisher_d_threshold": -0.00026152837488817684,
+   "zlema_trima_bear": -1.3522592669373753e-05,
+   "zlema_trima_bull": 0.0
+  },
+  "results": {
+   "roi": 4.833805651867662,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5323275862068966
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:00:27 2025": {
+  "tune": {
+   "zlema_period": 14.0,
+   "trima_period": 14.0,
+   "fisher_period": 14.0,
+   "buy_threshold": 3,
+   "sell_threshold": 3,
+   "zlema_d_threshold": 0.0,
+   "trima_d_threshold": 0.0,
+   "fisher_d_threshold": 0.0,
+   "zlema_trima_bear": 0.0,
+   "zlema_trima_bull": 0.0
+  },
+  "results": {
+   "roi": 1.4852687869866301,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.4136690647482014
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:00:27 2025": {
+  "tune": {
+   "zlema_period": 14.265620611950734,
+   "trima_period": 14.181800942349614,
+   "fisher_period": 13.824137813750408,
+   "buy_threshold": 3,
+   "sell_threshold": 5,
+   "zlema_d_threshold": -0.00024640728931522653,
+   "trima_d_threshold": -0.00019623404755796095,
+   "fisher_d_threshold": -0.00023781953240805236,
+   "zlema_trima_bear": -5.1522243882777714e-05,
+   "zlema_trima_bull": 0.0
+  },
+  "results": {
+   "roi": 0.5402957683375458,
+   "sortino_ratio": -0.5097042316624543,
+   "trade_win_rate": 1.0
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 21:01:26 2025": {
+  "tune": {
+   "zlema_period": 14.061062284042858,
+   "trima_period": 15.124768593142427,
+   "fisher_period": 14.328207284983106,
+   "buy_threshold": 5,
+   "sell_threshold": 3,
+   "zlema_d_threshold": -0.00019952229916317884,
+   "trima_d_threshold": -0.00042276636653356406,
+   "fisher_d_threshold": -0.0023102523487210404,
+   "zlema_trima_bear": -3.470146021298048e-05,
+   "zlema_trima_bull": -0.00015177914244020581
+  },
+  "results": {
+   "roi": 1.5118673597467138,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.36923076923076925
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:01:26 2025": {
+  "tune": {
+   "zlema_period": 14.265620611950734,
+   "trima_period": 14.13373506822629,
+   "fisher_period": 13.711559184290078,
+   "buy_threshold": 1,
+   "sell_threshold": 3,
+   "zlema_d_threshold": -0.0003165122533948506,
+   "trima_d_threshold": 3.1816434687593444e-05,
+   "fisher_d_threshold": -0.00026152837488817684,
+   "zlema_trima_bear": -6.761296334686876e-06,
+   "zlema_trima_bull": 0.0
+  },
+  "results": {
+   "roi": 1.2392760742371578,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.4478114478114478
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:01:26 2025": {
+  "tune": {
+   "zlema_period": 13.033529614180903,
+   "trima_period": 15.222339418661484,
+   "fisher_period": 15.011091204228421,
+   "buy_threshold": 1,
+   "sell_threshold": 1,
+   "zlema_d_threshold": -2.540167578383057e-05,
+   "trima_d_threshold": -0.0002558520354505214,
+   "fisher_d_threshold": -0.0015603147536982758,
+   "zlema_trima_bear": -7.729452169714642e-06,
+   "zlema_trima_bull": 0.00036886244640438174
+  },
+  "results": {
+   "roi": 0.7257139346664399,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.48393886023915844
+  }
+ }
+}

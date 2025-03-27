@@ -1,0 +1,96 @@
+{
+ "source": "\"\"\"\nbbadx_mac_dr_si.py\n\nBig Bad X Mac Dr Scipy\n\nThis is a custom trading bot implemented using the qTradex platform for cryptocurrency trading. \nThe bot combines multiple technical indicators and filters to make buy and sell decisions. \nThe name is a playful nod to the bot's \"bad\" trading style and its reliance on technical indicators like MACD, RSI, ADX, FFT, and more.\n\nCore Features:\n- Uses the **MACD** (Moving Average Convergence Divergence) to identify trend reversals.\n- Relies on the **RSI** (Relative Strength Index) to determine overbought and oversold conditions.\n- Applies **Fourier Transform (FFT)** with a low-pass filter to remove high-frequency noise and highlight significant trends.\n- Utilizes **ADX** (Average Directional Index) to measure the strength of the trend and distinguish between trending and range-bound markets.\n- Incorporates customizable parameters for fine-tuning the strategy, including thresholds for Z-scores, FFT filters, and Bollinger Bands.\n- Market regime detection: Uses ADX to determine whether the market is trending or range-bound.\n\nStrategy Logic:\n- **Buy conditions**:\n  - The MACD line must cross above the MACD signal line, indicating a bullish trend.\n  - RSI should be above a specified threshold, indicating upward momentum.\n  - The FFT filter should show positive signals, suggesting the presence of a dominant trend.\n  \n- **Sell conditions**:\n  - The MACD line must cross below the MACD signal line, indicating a bearish trend.\n  - RSI should fall below a specified threshold, indicating downward momentum.\n  - The FFT filter should show negative signals, suggesting the trend is weakening.\n\"\"\"\n\nimport numpy as np\nimport qtradex as qx\nfrom scipy.fft import fft, fftfreq\nfrom scipy.signal import butter, filtfilt\n\n\nclass BBadXMacDrSi(qx.BaseBot):\n    def __init__(self):\n        # Parameters for the strategy (customizable through tuning)\n        self.tune = {\n            \"macd_fast_period\": 12.0,            # Fast period for MACD\n            \"macd_slow_period\": 26.0,            # Slow period for MACD\n            \"macd_signal_period\": 9.0,           # Signal period for MACD\n            \"rsi_period\": 14.0,                  # Period for RSI\n            \"adx_period\": 14.0,                  # Period for ADX\n            \"rsi_zscore_buy_threshold\": 1.0,     # Z-score threshold for RSI when buying\n            \"rsi_zscore_sell_threshold\": -1.0,   # Z-score threshold for RSI when selling\n            \"macd_zscore_buy_threshold\": 1.0,    # Z-score threshold for MACD when buying\n            \"macd_zscore_sell_threshold\": -1.0,  # Z-score threshold for MACD when selling\n            \"fft_filtered_buy\": 0.0,             # Threshold for FFT filtered data when buying\n            \"fft_filtered_sell\": 0.0,            # Threshold for FFT filtered data when selling\n            \"bollinger_std_dev\": 2.0,            # Std deviation for Bollinger Bands\n            \"bollinger_window_size\": 20,         # Window size for Bollinger Bands\n            \"adx_threshold\": 25.0,               # ADX threshold to distinguish between trending and range-bound market\n            \"cutoff_frequency\": 0.1,             # Low-pass filter cutoff frequency for FFT\n            \"low_pass_order\": 3,                 # Order of Butterworth filter\n            \"btype\": 0,                          # 0 for low-pass, 1 for high-pass, etc.\n            \"analog\": 1,                         # 1 for True, 0 for False (analog filter type)\n            \"fft_d\": 1.0,                        # Sampling interval for FFT\n            # Control for flipping the direction of comparisons (0 = default, 1 = flipped)\n            \"macd_comparison\": 0,                # 0 for no flip (MACD: '>' for Buy), 1 for flipped ('<' for Buy)\n            \"rsi_comparison\": 0,                 # 0 for no flip (RSI: '>' for Buy), 1 for flipped ('<' for Buy)\n            \"fft_comparison\": 0,                 # 0 for no flip (FFT: '>' for Buy), 1 for flipped ('<' for Buy)\n        }\n        \n        # Optimizer clamps to limit the parameter ranges for optimization\n        self.clamps = [\n            [5, 20, 1.0],   # macd_fast_period\n            [15, 50, 1.0],  # macd_slow_period\n            [5, 15, 1.0],   # macd_signal_period\n            [5, 30, 1.0],   # rsi_period\n            [5, 30, 1.0],   # adx_period\n            [0.0, 3.0, 0.1],  # rsi_zscore_buy_threshold\n            [-3.0, 0.0, 0.1], # rsi_zscore_sell_threshold\n            [0.0, 3.0, 0.1],  # macd_zscore_buy_threshold\n            [-3.0, 0.0, 0.1], # macd_zscore_sell_threshold\n            [-1,1,0.5], # fft_filtered\n            [-1,1,0.5], # fft_filtered\n            [1.5, 3.0, 0.1],  # bollinger_std_dev\n            [10, 50, 1.0],  # bollinger_window_size\n            [15.0, 40.0, 0.5], # adx_threshold\n            [0.01, 0.5, 0.01],  # cutoff_frequency\n            [2, 5, 1],  # low_pass_order\n            [0, 1, 1],  # btype (low=0, high=1, etc.)\n            [0, 1, 1],  # analog (True=1, False=0)\n            [0.1, 2.0, 0.01],  # fft_d (Sampling interval)\n            [0, 1, 1],  # macd_comparison (0 = no flip, 1 = flipped)\n            [0, 1, 1],  # rsi_comparison (0 = no flip, 1 = flipped)\n            [0, 1, 1],  # fft_comparison (0 = no flip, 1 = flipped)\n        ]\n        \n        # Initialize storage for trade details (e.g., holding positions, last trade info)\n        self.storage = {\"hold\": 0, \"last_trade_time\": 0, \"trade_price\": 0}\n    \n    def indicators(self, data):\n        \"\"\"\n        Calculate key technical indicators (MACD, RSI, FFT, and ADX) for strategy decision-making.\n        \"\"\"\n        # MACD calculation: MACD line and Signal line\n        macd_line, macd_signal, _ = qx.float_period(qx.tu.macd, \n            (data[\"close\"], self.tune[\"macd_fast_period\"], self.tune[\"macd_slow_period\"], self.tune[\"macd_signal_period\"]), \n            (1, 2, 3))\n\n        # RSI (Relative Strength Index) calculation: Momentum indicator that tells overbought/oversold conditions\n        rsi = qx.float_period(qx.tu.rsi, (data[\"close\"], self.tune[\"rsi_period\"]), (1,))\n        \n        # FFT (Fast Fourier Transform): Frequency analysis to detect underlying cyclical patterns\n        fft_data = fft(data[\"close\"])\n        fft_freqs = fftfreq(len(data[\"close\"]), d=self.tune[\"fft_d\"])  # Frequencies for FFT\n        # Low-pass filter applied to FFT data to remove high-frequency noise and isolate significant trends\n        fft_filtered = self.low_pass_filter(fft_data)\n        \n        # ADX (Average Directional Index): Measures trend strength\n        adx = qx.float_period(qx.tu.adx, (data[\"high\"], data[\"low\"], data[\"close\"], self.tune[\"adx_period\"]), (3,))\n        \n        return {\n            \"macd_line\": macd_line,\n            \"macd_signal\": macd_signal,\n            \"rsi\": rsi,\n            \"fft_filtered\": fft_filtered,\n            \"adx\": adx,\n        }\n\n    def low_pass_filter(self, data):\n        \"\"\"\n        Apply a low-pass filter to the FFT data to remove high-frequency noise and extract the primary trend.\n        This is done by applying a Butterworth filter to the data.\n\n        Traceback (most recent call last):\n          File \"/home/squid/Documents/QTRADEX/QTRADEX/qtradex/mac_dr_si.py\", line 228, in <module>\n            main()\n          File \"/home/squid/Documents/QTRADEX/QTRADEX/qtradex/mac_dr_si.py\", line 224, in main\n            qx.dispatch(bot, data, wallet)\n          File \"/home/squid/Documents/QTRADEX/QTRADEX/qtradex/qtradex/core/dispatch.py\", line 106, in dispatch\n            optimizer.optimize(bot)\n          File \"/home/squid/Documents/QTRADEX/QTRADEX/qtradex/qtradex/optimizers/qpso.py\", line 349, in optimize\n            backtest(bot, self.data, self.wallet.copy(), plot=False),\n          File \"/home/squid/Documents/QTRADEX/QTRADEX/qtradex/qtradex/core/backtest.py\", line 68, in backtest\n            indicators = bot.indicators(data)\n          File \"/home/squid/Documents/QTRADEX/QTRADEX/qtradex/mac_dr_si.py\", line 110, in indicators\n            fft_filtered = self.low_pass_filter(fft_data)\n          \n\n          File \"/home/squid/Documents/QTRADEX/QTRADEX/qtradex/mac_dr_si.py\", line 139, in low_pass_filter\n            return filtfilt(b, a, np.abs(data))  # Apply the filter to the absolute value of FFT data\n          \n\n          File \"/home/squid/python9/lib/python3.9/site-packages/scipy/signal/_signaltools.py\", line 4163, in filtfilt\n            zi = lfilter_zi(b, a)\n          File \"/home/squid/python9/lib/python3.9/site-packages/scipy/signal/_signaltools.py\", line 3717, in lfilter_zi\n            zi = np.linalg.solve(IminusA, B)\n          File \"/home/squid/python9/lib/python3.9/site-packages/numpy/linalg/linalg.py\", line 409, in solve\n            r = gufunc(a, b, signature=signature, extobj=extobj)\n          File \"/home/squid/python9/lib/python3.9/site-packages/numpy/linalg/linalg.py\", line 112, in _raise_linalgerror_singular\n            raise LinAlgError(\"Singular matrix\")\n        numpy.linalg.LinAlgError: Singular matrix\n\n\n        def low_pass_filter(self, data):\n            ''''\n            Apply a low-pass filter to the FFT data to remove high-frequency noise and extract the primary trend.\n            This is done by applying a Butterworth filter to the data.\n            \n            '''\n            # Select filter type based on configuration (low-pass, high-pass, etc.)\n            btype_map = ['low', 'high', 'bandpass', 'bandstop']\n            btype = btype_map[self.tune[\"btype\"]]\n            analog = bool(self.tune[\"analog\"])\n\n            # Check for empty or constant data before filtering\n            if np.all(data == data[0]):  # Check if data is constant\n                print(\"Warning: Data is constant. Skipping filter.\")\n                return data\n\n            nyquist = 0.5 * len(data)  # Nyquist frequency\n            if nyquist <= 1:\n                print(\"Warning: Nyquist frequency is too low. Skipping filter.\")\n                return data\n            \n            # Normalized cutoff frequency for filter\n            normal_cutoff = self.tune[\"cutoff_frequency\"] / nyquist\n            \n            # Ensure cutoff is reasonable\n            if normal_cutoff <= 0 or normal_cutoff >= 1:\n                print(\"Warning: Invalid cutoff frequency. Skipping filter.\")\n                return data\n            \n            # Calculate Butterworth filter coefficients\n            try:\n                b, a = butter(self.tune[\"low_pass_order\"], normal_cutoff, btype=btype, analog=analog)\n            except Exception as e:\n                print(f\"Error creating filter coefficients: {e}\")\n                return data\n            \n            # Check if filter coefficients are valid\n            if np.linalg.det(np.array([b, a])) == 0:\n                print(\"Warning: Singular filter coefficients. Skipping filter.\")\n                return data\n\n            try:\n                # Apply the filter to the absolute value of FFT data\n                return filtfilt(b, a, np.abs(data))\n            except Exception as e:\n                print(f\"Error applying filter: {e}\")\n                return data\n\n        \"\"\"\n        # Select filter type based on configuration (low-pass, high-pass, etc.)\n        btype_map = ['low', 'high', 'bandpass', 'bandstop']\n        btype = btype_map[self.tune[\"btype\"]]\n        analog = bool(self.tune[\"analog\"])\n        \n        nyquist = 0.5 * len(data)  # Nyquist frequency\n        normal_cutoff = self.tune[\"cutoff_frequency\"] / nyquist  # Normalized cutoff frequency\n        b, a = butter(self.tune[\"low_pass_order\"], normal_cutoff, btype=btype, analog=analog)\n        if nyquist <= 1:\n            return np.abs(data)\n        else:\n            return filtfilt(b, a, np.abs(data))  # Apply the filter to the absolute value of FFT data\n    \n    def plot(self, *args):\n        \"\"\"\n        Plot various indicators for analysis, including MACD, RSI, FFT, and ADX.\n        \"\"\"\n        qx.plot(*args, \n            (\n                (\"macd_line\", \"MACD Line\", \"blue\", 0, \"BBadXMacDrSi\"),\n                (\"macd_signal\", \"MACD Signal\", \"orange\", 0, \"BBadXMacDrSi\"),\n                (\"rsi\", \"RSI\", \"green\", 0, \"BBadXMacDrSi\"),\n                (\"fft_filtered\", \"FFT Filtered\", \"purple\", 0, \"BBadXMacDrSi\"),\n                (\"adx\", \"ADX\", \"red\", 0, \"BBadXMacDrSi\"),\n            )\n        )\n    \n    def strategy(self, state, indicators):\n        \"\"\"\n        The main strategy logic for handling buy/sell actions based on technical indicators and conditions.\n        \"\"\"\n        macd_line = indicators[\"macd_line\"]\n        macd_signal = indicators[\"macd_signal\"]\n        rsi = indicators[\"rsi\"]\n        fft_filtered = indicators[\"fft_filtered\"]\n        adx = indicators[\"adx\"]\n        \n        current_time = state[\"unix\"]\n        \n        # Detect market regime (Trend vs Range)\n        if adx < self.tune[\"adx_threshold\"]:\n            market_regime = \"range\"  # Market is range-bound, typically no strong trends\n        else:\n            market_regime = \"trend\"  # Market is trending, look for strong price movements\n\n        # Buy conditions with dynamic comparison operators\n        if self.tune[\"macd_comparison\"] * (macd_line - macd_signal) > 0 and \\\n           self.tune[\"rsi_comparison\"] * (rsi - self.tune[\"rsi_zscore_buy_threshold\"]) > 0 and \\\n           self.tune[\"fft_comparison\"] * (fft_filtered - self.tune[\"fft_filtered_buy\"]) > 0:\n            # Ensure we don't already have a position before buying\n            if state[\"last_trade\"] is None or isinstance(state[\"last_trade\"], qx.Sell):\n                self.storage[\"last_trade_time\"] = current_time\n                self.storage[\"trade_price\"] = state[\"close\"]\n                return qx.Buy()  # Execute Buy action\n            \n        # Sell conditions with dynamic comparison operators\n        elif self.tune[\"macd_comparison\"] * (macd_line - macd_signal) < 0 and \\\n             self.tune[\"rsi_comparison\"] * (rsi - self.tune[\"rsi_zscore_sell_threshold\"]) < 0 and \\\n             self.tune[\"fft_comparison\"] * (fft_filtered - self.tune[\"fft_filtered_sell\"]) < 0:\n            # Ensure we don't already have a position before selling\n            if state[\"last_trade\"] is None or isinstance(state[\"last_trade\"], qx.Buy):\n                self.storage[\"last_trade_time\"] = current_time\n                self.storage[\"trade_price\"] = state[\"close\"]\n                return qx.Sell()  # Execute Sell action\n        \n        # If no conditions are met, do nothing (no action taken)\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        \"\"\"\n        Returns the fitness criteria for strategy optimization (e.g., ROI, Sortino ratio, win rate).\n        \"\"\"\n        return [\n            \"roi_gross\",             # Gross Return on Investment\n            \"sortino_ratio\",         # Risk-adjusted return (Sortino ratio)\n            \"trade_win_rate\",       # Percentage of profitable trades\n        ], {}\n\n# Main execution to backtest the bot\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2018-01-01\",\n        end=\"2025-01-01\",\n    )\n    bot = BBadXMacDrSi()\n    # Try to load the optimized tune parameters if available\n    # try:\n    #     bot.tune = qx.load_tune(bot)\n    # except:\n    #     print(\"Failed to load tune\")\n\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 13:59:07 2025": {
+  "tune": {
+   "macd_fast_period": 12.457579099802702,
+   "macd_slow_period": 28.120043735698943,
+   "macd_signal_period": 8.811173039997358,
+   "rsi_period": 14.370978244063636,
+   "adx_period": 14.893945601323399,
+   "rsi_zscore_buy_threshold": 0.9633775931373512,
+   "rsi_zscore_sell_threshold": -1.0116610826870556,
+   "macd_zscore_buy_threshold": 0.98979963813564,
+   "macd_zscore_sell_threshold": -0.99034242641615,
+   "fft_filtered_buy": -1.0645747571358974e-05,
+   "fft_filtered_sell": 0.0,
+   "bollinger_std_dev": 2.0,
+   "bollinger_window_size": 19,
+   "adx_threshold": 24.787075939570048,
+   "cutoff_frequency": 0.09598213862649221,
+   "low_pass_order": 4,
+   "btype": 0,
+   "analog": 1,
+   "fft_d": 0.9959208129150199,
+   "macd_comparison": 1,
+   "rsi_comparison": 1,
+   "fft_comparison": 1
+  },
+  "results": {
+   "roi": 3.877213265037689,
+   "sortino_ratio": 2.827213265037689,
+   "trade_win_rate": 0
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 13:59:07 2025": {
+  "tune": {
+   "macd_fast_period": 12.457579099802702,
+   "macd_slow_period": 28.120043735698943,
+   "macd_signal_period": 8.811173039997358,
+   "rsi_period": 14.370978244063636,
+   "adx_period": 14.893945601323399,
+   "rsi_zscore_buy_threshold": 0.9633775931373512,
+   "rsi_zscore_sell_threshold": -1.0116610826870556,
+   "macd_zscore_buy_threshold": 0.98979963813564,
+   "macd_zscore_sell_threshold": -0.99034242641615,
+   "fft_filtered_buy": -1.0645747571358974e-05,
+   "fft_filtered_sell": 0.0,
+   "bollinger_std_dev": 2.0,
+   "bollinger_window_size": 19,
+   "adx_threshold": 24.787075939570048,
+   "cutoff_frequency": 0.09598213862649221,
+   "low_pass_order": 4,
+   "btype": 0,
+   "analog": 1,
+   "fft_d": 0.9959208129150199,
+   "macd_comparison": 1,
+   "rsi_comparison": 1,
+   "fft_comparison": 1
+  },
+  "results": {
+   "roi": 3.877213265037689,
+   "sortino_ratio": 2.827213265037689,
+   "trade_win_rate": 0
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 13:59:07 2025": {
+  "tune": {
+   "macd_fast_period": 12.0,
+   "macd_slow_period": 26.0,
+   "macd_signal_period": 9.0,
+   "rsi_period": 14.0,
+   "adx_period": 14.0,
+   "rsi_zscore_buy_threshold": 1.0,
+   "rsi_zscore_sell_threshold": -1.0,
+   "macd_zscore_buy_threshold": 1.0,
+   "macd_zscore_sell_threshold": -1.0,
+   "fft_filtered_buy": 0.0,
+   "fft_filtered_sell": 0.0,
+   "bollinger_std_dev": 2.0,
+   "bollinger_window_size": 20,
+   "adx_threshold": 25.0,
+   "cutoff_frequency": 0.1,
+   "low_pass_order": 3,
+   "btype": 0,
+   "analog": 1,
+   "fft_d": 1.0,
+   "macd_comparison": 0,
+   "rsi_comparison": 0,
+   "fft_comparison": 0
+  },
+  "results": {
+   "roi": 0.35465792011816893,
+   "sortino_ratio": -0.695342079881831,
+   "trade_win_rate": 0
+  }
+ }
+}

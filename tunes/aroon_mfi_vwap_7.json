@@ -1,0 +1,147 @@
+{
+ "source": "\"\"\"\n\u2554\u2550\u2557\u2554\u2566\u2557\u2566\u2550\u2557\u2554\u2550\u2557\u2554\u2566\u2557\u2554\u2550\u2557\u2550\u2557 \u2566\n\u2551\u2550\u256c\u2557\u2551 \u2560\u2566\u255d\u2560\u2550\u2563 \u2551\u2551\u2551\u2563 \u2554\u2569\u2566\u255d\n\u255a\u2550\u255d\u255a\u2569 \u2569\u255a\u2550\u2569 \u2569\u2550\u2569\u255d\u255a\u2550\u255d\u2569 \u255a\u2550\n\naroon_mfi_vwap.py\n\nIndicators:\n\n- Short Exponential Moving Average (EMA)\n- Aroon Indicator\n- Money Flow Index (MFI)\n- Volume Weighted Average Price (VWAP)\n\nStrategy:\n\nqx.Buy Signal:\n\n- The difference between `aroon_up` and `aroon_down` is greater than the specified threshold for buying (`aroon_buy`).\n- The `short_ema` is less than the `vwap`, indicating that the market may be oversold.\n\n\nqx.Sell Signal:\n\n- The MFI is greater than the specified threshold (`mfi`), indicating overbought conditions.\n- The difference between `aroon_up` and `aroon_down` is less than the specified threshold for selling (`aroon_sell`).\n- The `short_ema` is greater than the `vwap`, suggesting a potential reversal to a downtrend.\n\"\"\"\nimport math\n\nimport numpy as np\nimport qtradex as qx\n\n\nclass AroonMfiVwap(qx.BaseBot):\n    def __init__(self):\n        self.tune = {\n            \"short_period\": 2.0,\n            \"vwap_period\": 8.0,\n            \"mfi_period\": 30.0,\n            \"mfi\": 41.0,\n            \"aroon_period\": 105,\n            \"aroon_buy\": 0.0,\n            \"aroon_sell\": 0.0,\n        }\n\n        self.clamps = [\n            # min, max, strength\n            [1, 200, 0.5],\n            [1, 200, 0.5],\n            [1, 200, 0.5],\n            [1, 200, 0.5],\n            [1, 200, 0.5],\n            [0, 100, 1],\n            [0, 100, 1],\n        ]\n        \n\n    def plot(self, *args):\n        qx.plot(\n            *args,\n            (\n                (\"vwap\", \"VWAP\", \"blue\", 0, \"Primary\"),\n                (\"short_ema\", \"Short EMA\", \"white\", 0, \"Primary\"),\n                (\"mfi\", \"MFI\", \"yellow\", 1, \"Secondary\"),\n                (\"aroon_down\", \"AROON_down\", \"red\", 1, \"Secondary\"),\n                (\"aroon_up\", \"AROON_up\", \"green\", 1, \"Secondary\"),\n            ),\n        )\n\n    def indicators(self, data):\n        short_ema = qx.float_period(\n            qx.tu.ema, (data[\"close\"], self.tune[\"short_period\"]), (1,)\n        )\n        mfi = qx.float_period(\n            qx.tu.mfi,\n            (\n                data[\"high\"],\n                data[\"low\"],\n                data[\"close\"],\n                data[\"volume\"],\n                self.tune[\"mfi_period\"],\n            ),\n            (4,),\n        )\n        vwap = qx.float_period(\n            qx.tu.vwma, (data[\"close\"], data[\"volume\"], self.tune[\"vwap_period\"]), (2,)\n        )\n        aroon_down, aroon_up = qx.float_period(\n            qx.tu.aroon, (data[\"high\"], data[\"low\"], self.tune[\"aroon_period\"]), (2,)\n        )\n\n        return {\n            \"short_ema\": short_ema,\n            \"aroon_down\": aroon_down,\n            \"aroon_up\": aroon_up,\n            \"mfi\": mfi,\n            \"vwap\": vwap,\n        }\n\n    def strategy(self, state, indicators):\n        # Strategy conditions\n        if (indicators[\"aroon_up\"] - indicators[\"aroon_down\"]) > self.tune[\"aroon_buy\"]:\n            if indicators[\"short_ema\"] < indicators[\"vwap\"]:\n                if state[\"last_trade\"] is None or isinstance(state[\"last_trade\"], qx.Sell):\n                    return qx.Buy()  # qx.Buy signal\n\n        elif indicators[\"mfi\"] > self.tune[\"mfi\"]:\n            if (indicators[\"aroon_up\"] - indicators[\"aroon_down\"]) < self.tune[\n                \"aroon_sell\"\n            ]:\n                if indicators[\"short_ema\"] > indicators[\"vwap\"]:\n                    if state[\"last_trade\"] is None or isinstance(\n                        state[\"last_trade\"], qx.Buy\n                    ):\n                        return qx.Sell()  # qx.Sell signal\n\n        return None  # No action if conditions are not met\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_gross\",\n            \"sortino_ratio\",\n            \"trade_win_rate\",\n        ], {}\n\n\n# Main Function\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2020-01-01\",\n        end=\"2025-01-01\",\n    )\n\n    bot = AroonMfiVwap()\n    try:\n        bot.tune = qx.load_tune(bot, \"BEST ROI TUNE\")\n    except:\n        print(\"Failed to load tune\")\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 20:20:17 2025": {
+  "tune": {
+   "short_period": 2.0910819704535077,
+   "vwap_period": 7.688072559264777,
+   "mfi_period": 27.355732629366514,
+   "mfi": 34.07490472561856,
+   "aroon_period": 100.16020561806509,
+   "aroon_buy": 0.00097092974843308,
+   "aroon_sell": 0.0009132654918803961
+  },
+  "results": {
+   "roi": 1.4644373089948903,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 20:20:17 2025": {
+  "tune": {
+   "short_period": 2.0,
+   "vwap_period": 8.0,
+   "mfi_period": 30.0,
+   "mfi": 41.0,
+   "aroon_period": 105.0,
+   "aroon_buy": 0.0,
+   "aroon_sell": 0.0
+  },
+  "results": {
+   "roi": 0.9084817808663421,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 20:20:17 2025": {
+  "tune": {
+   "short_period": 2.0849338145062317,
+   "vwap_period": 7.451487871417516,
+   "mfi_period": 26.48094217076046,
+   "mfi": 33.71199113811458,
+   "aroon_period": 99.57563979009106,
+   "aroon_buy": 0.0012961143298401753,
+   "aroon_sell": 0.0005035680652112642
+  },
+  "results": {
+   "roi": 1.3949371368155787,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5999999999999999
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 21:15:27 2025": {
+  "tune": {
+   "short_period": 2.0294519426983877,
+   "vwap_period": 7.5294375129537165,
+   "mfi_period": 25.892717527361174,
+   "mfi": 32.71369471452704,
+   "aroon_period": 100.86929072680947,
+   "aroon_buy": 0.0007379226814487939,
+   "aroon_sell": 0.0
+  },
+  "results": {
+   "roi": 1.4879204503701091,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:15:27 2025": {
+  "tune": {
+   "short_period": 2.0910819704535077,
+   "vwap_period": 7.688072559264777,
+   "mfi_period": 27.355732629366514,
+   "mfi": 34.07490472561856,
+   "aroon_period": 100.16020561806509,
+   "aroon_buy": 0.00097092974843308,
+   "aroon_sell": 0.0009132654918803961
+  },
+  "results": {
+   "roi": 1.468082883765867,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:15:27 2025": {
+  "tune": {
+   "short_period": 2.5523184108193218,
+   "vwap_period": 7.822456917619432,
+   "mfi_period": 27.76601847862622,
+   "mfi": 31.641654706398263,
+   "aroon_period": 99.09619389518673,
+   "aroon_buy": 0.0007458835081108286,
+   "aroon_sell": 0.001693944489212679
+  },
+  "results": {
+   "roi": 1.3933274639875757,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5999999999999999
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 21:17:23 2025": {
+  "tune": {
+   "short_period": 1.970699232851552,
+   "vwap_period": 7.117755620313815,
+   "mfi_period": 24.829031859320807,
+   "mfi": 31.594598516194786,
+   "aroon_period": 101.69382288083385,
+   "aroon_buy": 0.0005448623643237586,
+   "aroon_sell": 0.0008291420113815415
+  },
+  "results": {
+   "roi": 1.2350984194089123,
+   "sortino_ratio": 0.185099398715582,
+   "trade_win_rate": 1.0
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:17:23 2025": {
+  "tune": {
+   "short_period": 1.970699232851552,
+   "vwap_period": 7.117755620313815,
+   "mfi_period": 24.829031859320807,
+   "mfi": 31.594598516194786,
+   "aroon_period": 101.69382288083385,
+   "aroon_buy": 0.0005448623643237586,
+   "aroon_sell": 0.0008291420113815415
+  },
+  "results": {
+   "roi": 1.235099398715582,
+   "sortino_ratio": 0.18509841940891242,
+   "trade_win_rate": 1.0
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:17:23 2025": {
+  "tune": {
+   "short_period": 2.0294519426983877,
+   "vwap_period": 7.5294375129537165,
+   "mfi_period": 25.892717527361174,
+   "mfi": 32.71369471452704,
+   "aroon_period": 100.86929072680947,
+   "aroon_buy": 0.0007379226814487939,
+   "aroon_sell": 0.0
+  },
+  "results": {
+   "roi": 1.2141102509271418,
+   "sortino_ratio": 0.1641102509271417,
+   "trade_win_rate": 1.0
+  }
+ }
+}

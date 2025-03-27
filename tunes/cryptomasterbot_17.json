@@ -1,0 +1,237 @@
+{
+ "source": "\nimport time\n\nimport numpy as np\nimport qtradex as qx\n\n\nclass CryptoMasterBot(qx.BaseBot):\n    def __init__(self):\n        self.tune = {\n            \"sma_period\": 20.0,  # Period for Simple Moving Average (SMA)\n            \"ema_period\": 14.0,  # Period for Exponential Moving Average (EMA)\n            \"rsi_period\": 14.0,  # Period for Relative Strength Index (RSI)\n            \"macd_short_period\": 12.0,  # MACD short period\n            \"macd_long_period\": 26.0,  # MACD long period\n            \"macd_signal_period\": 9.0,  # MACD signal period\n            \"bollinger_period\": 20.0,  # Bollinger Bands period\n            \"bollinger_deviation\": 2.0,  # Bollinger Bands standard deviation\n            \"fisher_period\": 14.0,  # Fisher Transform period\n            \"stoch_k_period\": 14.0,  # Stochastic K period\n            \"stoch_kslow_period\": 3.0,  # Stochastic K slowing period\n            \"stoch_d_period\": 14.0,  # Stochastic D period\n            \"adx_period\": 14.0,  # Average Directional Index (ADX) period\n            \"adx_threshold\": 25.0,  # ADX threshold for trend confirmation\n            \"volatility_period\": 14.0,  # Volatility indicator period\n            \"buy_threshold\": 4,  # Number of conditions for a buy signal\n            \"sell_threshold\": 4,  # Number of conditions for a sell signal\n        }\n\n        self.clamps = [\n            [5, 100, 0.5],  # For SMA period\n            [5, 100, 0.5],  # For EMA period\n            [5, 50, 0.5],  # For RSI period\n            [5, 50, 0.5],  # For MACD short period\n            [5, 50, 0.5],  # For MACD long period\n            [5, 50, 0.5],  # For MACD signal period\n            [5, 100, 0.5],  # For Bollinger Bands period\n            [1, 5, 0.5],  # For Bollinger Bands standard deviation\n            [5, 50, 0.5],  # For Fisher Transform period\n            [5, 50, 0.5],  # For Stochastic k period\n            [5, 50, 0.5],  # For Stochastic kslow period\n            [5, 50, 0.5],  # For Stochastic d period\n            [5, 50, 0.5],  # For ADX period\n            [10, 50, 0.5],  # For ADX threshold\n            [5, 100, 0.5],  # For volatility period\n            [2, 5, 1],  # For buy threshold\n            [2, 5, 1],  # For sell threshold\n        ]\n\n    def indicators(self, data):\n        \"\"\"\n        Calculate the various indicators for the strategy.\n        \"\"\"\n        # Simple Moving Average (SMA)\n        sma = qx.float_period(qx.tu.sma, (data[\"close\"], self.tune[\"sma_period\"]), (1,))\n        \n        # Exponential Moving Average (EMA)\n        ema = qx.float_period(qx.tu.ema, (data[\"close\"], self.tune[\"ema_period\"]), (1,))\n        \n        # Relative Strength Index (RSI)\n        rsi = qx.float_period(qx.tu.rsi, (data[\"close\"], self.tune[\"rsi_period\"]), (1,))\n        \n\n\n\n\n        # MACD (Moving Average Convergence Divergence)\n        macd, macd_signal, _ = qx.float_period(\n            qx.tu.macd, \n            (data[\"close\"], self.tune[\"macd_short_period\"], self.tune[\"macd_long_period\"], self.tune[\"macd_signal_period\"]), \n            (1, 2,3)\n        )\n        \n        # Bollinger Bands\n        upper_band, middle_band, lower_band = qx.float_period(\n            qx.tu.bbands, \n            (data[\"close\"], self.tune[\"bollinger_period\"], self.tune[\"bollinger_deviation\"]), \n            (1, 2)\n        )\n        \n        # Fisher Transform\n        fisher, fisher_signal = qx.float_period(\n            qx.tu.fisher, \n            (data[\"high\"], data[\"low\"], self.tune[\"fisher_period\"]), \n            (2,)\n        )\n        \n        # Stochastic Oscillator\n        stoch_k, stoch_d = qx.float_period(\n            qx.tu.stoch, \n            (data[\"high\"], data[\"low\"], data[\"close\"], self.tune[\"stoch_k_period\"], self.tune[\"stoch_kslow_period\"], self.tune[\"stoch_d_period\"]), \n            (3,4,5)\n        )\n        \n        # Average Directional Index (ADX)\n        adx = qx.float_period(\n            qx.tu.adx, \n            (data[\"high\"], data[\"low\"], data[\"close\"], self.tune[\"adx_period\"]), \n            (3,)\n        )\n        \n        # Volatility indicator (standard deviation of price)\n        volatility = qx.float_period(\n            qx.tu.stddev, \n            (data[\"close\"], self.tune[\"volatility_period\"]), \n            (1,)\n        )\n\n        return {\n            \"sma\": sma,\n            \"ema\": ema,\n            \"rsi\": rsi,\n            \"macd\": macd,\n            \"macd_signal\": macd_signal,\n            \"upper_band\": upper_band,\n            \"middle_band\": middle_band,\n            \"lower_band\": lower_band,\n            \"fisher\": fisher,\n            \"fisher_signal\": fisher_signal,\n            \"stoch_k\": stoch_k,\n            \"stoch_d\": stoch_d,\n            \"adx\": adx,\n            \"volatility\": volatility,\n        }\n\n    def plot(self, *args):\n        \"\"\"\n        Plot indicators for visual analysis.\n        \"\"\"\n        qx.plot(\n            *args,\n            (\n                (\"sma\", \"SMA\", \"yellow\", 0, \"Trend\"),\n                (\"ema\", \"EMA\", \"blue\", 0, \"Trend\"),\n                (\"rsi\", \"RSI\", \"green\", 1, \"Momentum\"),\n                (\"macd\", \"MACD\", \"purple\", 1, \"Momentum\"),\n                (\"macd_signal\", \"MACD Signal\", \"red\", 1, \"Momentum\"),\n                (\"upper_band\", \"Bollinger Upper\", \"cyan\", 0, \"Volatility\"),\n                (\"middle_band\", \"Bollinger Middle\", \"orange\", 0, \"Volatility\"),\n                (\"lower_band\", \"Bollinger Lower\", \"pink\", 0, \"Volatility\"),\n                (\"fisher\", \"Fisher\", \"blue\", 0, \"Reversal\"),\n                (\"fisher_signal\", \"Fisher Signal\", \"cyan\", 0, \"Reversal\"),\n                (\"stoch_k\", \"Stochastic K\", \"purple\", 1, \"Momentum\"),\n                (\"stoch_d\", \"Stochastic D\", \"red\", 1, \"Momentum\"),\n                (\"adx\", \"ADX\", \"green\", 0, \"Trend Strength\"),\n                (\"volatility\", \"Volatility\", \"magenta\", 1, \"Volatility\"),\n            ),\n        )\n\n    def strategy(self, state, indicators):\n        \"\"\"\n        Define strategy based on a mix of indicators.\n        \"\"\"\n        if state[\"last_trade\"] is None:\n            # Enter market with all capital on the first trade\n            return qx.Buy()\n\n        # Buy signal criteria\n        if (\n            sum(\n                [\n                    int(indicators[\"rsi\"] < 30),  # RSI below 30 (oversold)\n                    int(indicators[\"macd\"] > indicators[\"macd_signal\"]),  # MACD cross above signal\n                    int(state[\"close\"] > indicators[\"upper_band\"]),  # Price above upper Bollinger Band\n                    int(indicators[\"stoch_k\"] > indicators[\"stoch_d\"]),  # Stochastic K above D (bullish crossover)\n                    int(indicators[\"adx\"] > self.tune[\"adx_threshold\"]),  # ADX confirms trend strength\n                    int(indicators[\"volatility\"] > 0.02),  # Volatility increasing\n                ]\n            )\n            >= self.tune[\"buy_threshold\"]\n        ):\n            if isinstance(state[\"last_trade\"], qx.Sell):\n                # Exit short position and enter long with all capital\n                return qx.Buy()\n\n        # Sell signal criteria\n        if (\n            sum(\n                [\n                    int(indicators[\"rsi\"] > 70),  # RSI above 70 (overbought)\n                    int(indicators[\"macd\"] < indicators[\"macd_signal\"]),  # MACD cross below signal\n                    int(state[\"close\"] < indicators[\"lower_band\"]),  # Price below lower Bollinger Band\n                    int(indicators[\"stoch_k\"] < indicators[\"stoch_d\"]),  # Stochastic K below D (bearish crossover)\n                    int(indicators[\"adx\"] > self.tune[\"adx_threshold\"]),  # ADX confirms trend strength\n                    int(indicators[\"volatility\"] > 0.02),  # Volatility increasing\n                ]\n            )\n            >= self.tune[\"sell_threshold\"]\n        ):\n            if isinstance(state[\"last_trade\"], qx.Buy):\n                # Exit long position and enter short with all capital\n                return qx.Sell()\n\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        \"\"\"\n        Measure fitness of the bot based on ROI, Sortino ratio, and win rate.\n        \"\"\"\n        return [\"roi_gross\", \"sortino_ratio\", \"trade_win_rate\"], {}\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2023-01-01\",\n    )\n\n    bot = CryptoMasterBot()\n\n    # Try to load the optimized tune parameters if available\n\n    # Start the bot with backtest data and wallet\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 20:55:16 2025": {
+  "tune": {
+   "sma_period": 21.539295833755133,
+   "ema_period": 13.33169052279914,
+   "rsi_period": 13.992587664308944,
+   "macd_short_period": 11.393402786800134,
+   "macd_long_period": 26.92666181726175,
+   "macd_signal_period": 8.671949417459684,
+   "bollinger_period": 19.801308082371584,
+   "bollinger_deviation": 2.2668113653486426,
+   "fisher_period": 12.653358039333652,
+   "stoch_k_period": 15.986333569409698,
+   "stoch_kslow_period": 5.409802532522015,
+   "stoch_d_period": 15.758999125445584,
+   "adx_period": 11.70800191922945,
+   "adx_threshold": 24.03999076966523,
+   "volatility_period": 13.861548567018804,
+   "buy_threshold": 3,
+   "sell_threshold": 2
+  },
+  "results": {
+   "roi": 3.9288824736510657,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5381944444444444
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 20:55:16 2025": {
+  "tune": {
+   "sma_period": 20.0,
+   "ema_period": 14.0,
+   "rsi_period": 14.0,
+   "macd_short_period": 12.0,
+   "macd_long_period": 26.0,
+   "macd_signal_period": 9.0,
+   "bollinger_period": 20.0,
+   "bollinger_deviation": 2.0,
+   "fisher_period": 14.0,
+   "stoch_k_period": 14.0,
+   "stoch_kslow_period": 4.0,
+   "stoch_d_period": 14.0,
+   "adx_period": 14.0,
+   "adx_threshold": 25.0,
+   "volatility_period": 14.0,
+   "buy_threshold": 4,
+   "sell_threshold": 4
+  },
+  "results": {
+   "roi": 1.2052977905854245,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.46258503401360546
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 20:55:22 2025": {
+  "tune": {
+   "sma_period": 21.539295833755137,
+   "ema_period": 13.11309329668762,
+   "rsi_period": 13.900440748881408,
+   "macd_short_period": 11.315536383584096,
+   "macd_long_period": 26.735429603204942,
+   "macd_signal_period": 8.684174670950586,
+   "bollinger_period": 19.706096144813777,
+   "bollinger_deviation": 2.242822513543446,
+   "fisher_period": 13.161755822223306,
+   "stoch_k_period": 16.041748224756535,
+   "stoch_kslow_period": 5.409802532522015,
+   "stoch_d_period": 15.19660894406146,
+   "adx_period": 11.228717749623392,
+   "adx_threshold": 24.03999076966523,
+   "volatility_period": 13.786113791210369,
+   "buy_threshold": 3,
+   "sell_threshold": 2
+  },
+  "results": {
+   "roi": 3.5542739340358587,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5415224913494809
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 20:56:42 2025": {
+  "tune": {
+   "sma_period": 21.539295833755133,
+   "ema_period": 13.33169052279914,
+   "rsi_period": 13.992587664308944,
+   "macd_short_period": 11.393402786800134,
+   "macd_long_period": 26.92666181726175,
+   "macd_signal_period": 8.671949417459684,
+   "bollinger_period": 19.801308082371584,
+   "bollinger_deviation": 2.2668113653486426,
+   "fisher_period": 12.653358039333652,
+   "stoch_k_period": 15.986333569409698,
+   "stoch_kslow_period": 5.409802532522015,
+   "stoch_d_period": 15.758999125445584,
+   "adx_period": 11.70800191922945,
+   "adx_threshold": 24.03999076966523,
+   "volatility_period": 13.861548567018804,
+   "buy_threshold": 3,
+   "sell_threshold": 2
+  },
+  "results": {
+   "roi": 3.9288824736510657,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5381944444444444
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 20:56:42 2025": {
+  "tune": {
+   "sma_period": 21.539295833755133,
+   "ema_period": 13.33169052279914,
+   "rsi_period": 13.992587664308944,
+   "macd_short_period": 11.393402786800134,
+   "macd_long_period": 26.92666181726175,
+   "macd_signal_period": 8.671949417459684,
+   "bollinger_period": 19.801308082371584,
+   "bollinger_deviation": 2.2668113653486426,
+   "fisher_period": 12.653358039333652,
+   "stoch_k_period": 15.986333569409698,
+   "stoch_kslow_period": 5.409802532522015,
+   "stoch_d_period": 15.758999125445584,
+   "adx_period": 11.70800191922945,
+   "adx_threshold": 24.03999076966523,
+   "volatility_period": 13.861548567018804,
+   "buy_threshold": 3,
+   "sell_threshold": 2
+  },
+  "results": {
+   "roi": 3.9288824736510657,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5381944444444444
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 20:56:42 2025": {
+  "tune": {
+   "sma_period": 21.539295833755133,
+   "ema_period": 13.33169052279914,
+   "rsi_period": 13.992587664308944,
+   "macd_short_period": 11.835547815742594,
+   "macd_long_period": 26.926661817261753,
+   "macd_signal_period": 8.671949417459684,
+   "bollinger_period": 19.801308082371584,
+   "bollinger_deviation": 2.2373574281484436,
+   "fisher_period": 12.653358039333652,
+   "stoch_k_period": 15.986333569409698,
+   "stoch_kslow_period": 5.409802532522015,
+   "stoch_d_period": 15.758999125445584,
+   "adx_period": 11.70800191922945,
+   "adx_threshold": 23.91642991521966,
+   "volatility_period": 13.861548567018804,
+   "buy_threshold": 3,
+   "sell_threshold": 2
+  },
+  "results": {
+   "roi": 3.749135839931465,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5407071148342169
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 20:57:49 2025": {
+  "tune": {
+   "sma_period": 20.332047410397664,
+   "ema_period": 12.14659743846132,
+   "rsi_period": 13.834953211355721,
+   "macd_short_period": 11.980607518969812,
+   "macd_long_period": 26.137716364833658,
+   "macd_signal_period": 8.845573474013825,
+   "bollinger_period": 19.30670643638807,
+   "bollinger_deviation": 2.23780098158641,
+   "fisher_period": 14.95575461832189,
+   "stoch_k_period": 15.121761800742696,
+   "stoch_kslow_period": 5.729111890199485,
+   "stoch_d_period": 13.767649370949606,
+   "adx_period": 12.035006099462924,
+   "adx_threshold": 22.26786547457568,
+   "volatility_period": 13.936280468100922,
+   "buy_threshold": 6,
+   "sell_threshold": 5
+  },
+  "results": {
+   "roi": 2.142157485683704,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.6666666666666666
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 20:57:49 2025": {
+  "tune": {
+   "sma_period": 19.98596240584414,
+   "ema_period": 12.16729432092712,
+   "rsi_period": 14.166424124526017,
+   "macd_short_period": 11.495876641749934,
+   "macd_long_period": 25.22152258207127,
+   "macd_signal_period": 8.877381741466523,
+   "bollinger_period": 19.311956791538762,
+   "bollinger_deviation": 2.1019200670410907,
+   "fisher_period": 15.154364206677778,
+   "stoch_k_period": 14.498598769805998,
+   "stoch_kslow_period": 5.578123642412013,
+   "stoch_d_period": 13.811496709716508,
+   "adx_period": 12.585500165001562,
+   "adx_threshold": 24.217065082898465,
+   "volatility_period": 13.804559692845384,
+   "buy_threshold": 6,
+   "sell_threshold": 4
+  },
+  "results": {
+   "roi": 1.9709263098077419,
+   "sortino_ratio": 0.9209263098077418,
+   "trade_win_rate": 1.0
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 20:57:49 2025": {
+  "tune": {
+   "sma_period": 19.78262653508363,
+   "ema_period": 13.653424539654523,
+   "rsi_period": 14.0,
+   "macd_short_period": 11.848599858073902,
+   "macd_long_period": 26.08888740723959,
+   "macd_signal_period": 9.218960530781999,
+   "bollinger_period": 19.467156786060666,
+   "bollinger_deviation": 2.0425730013286008,
+   "fisher_period": 14.229631523740917,
+   "stoch_k_period": 14.0,
+   "stoch_kslow_period": 4.998046875,
+   "stoch_d_period": 14.0,
+   "adx_period": 14.166370650944678,
+   "adx_threshold": 24.062895654460643,
+   "volatility_period": 14.0,
+   "buy_threshold": 6,
+   "sell_threshold": 4
+  },
+  "results": {
+   "roi": 1.8670795949971575,
+   "sortino_ratio": 0.8170795949971574,
+   "trade_win_rate": 1.0
+  }
+ }
+}

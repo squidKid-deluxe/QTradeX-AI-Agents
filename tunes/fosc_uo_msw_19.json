@@ -1,0 +1,171 @@
+{
+ "source": "import math\nimport time\n\nimport numpy as np\nimport qtradex as qx\n\n\nclass UltimateForecastMesaBot(qx.BaseBot):\n    def __init__(self):\n        # Default tuning values (periods for UO, FO, MSW, and thresholds for buy/sell signals)\n        self.tune = {\n            # Periods for indicators\n            \"uo_short_period\": 7.0,  # Short period for Ultimate Oscillator\n            \"uo_medium_period\": 14.0,  # Medium period for Ultimate Oscillator\n            \"uo_long_period\": 28.0,  # Long period for Ultimate Oscillator\n            \"fosc_period\": 14.0,  # Period for Forecast Oscillator\n            \"msw_period\": 10.0,  # Period for Mesa Sine Wave\n            # Required Count of Signals\n            \"buy_threshold\": 3,  # Number of conditions to be true for a buy signal\n            \"sell_threshold\": 3,  # Number of conditions to be true for a sell signal\n            # Thresholds for indicators\n            \"uo_buy_threshold\": 30.0,  # UO Buy threshold (oversold)\n            \"uo_sell_threshold\": 70.0,  # UO Sell threshold (overbought)\n            \"fosc_buy_threshold\": 0.0,  # FO Buy threshold (positive)\n            \"fosc_sell_threshold\": 0.0,  # FO Sell threshold (negative)\n            \"msw_buy_threshold\": 0.0,  # MSW Buy threshold (above 0 for bullish cycle)\n            \"msw_sell_threshold\": 0.0,  # MSW Sell threshold (below 0 for bearish cycle)\n            # Derivative thresholds for signals\n            \"uo_buy_d_threshold\": 0.0,  # UO Buy derivative threshold (positive for uptrend)\n            \"fosc_buy_d_threshold\": 0.0,  # FO Buy derivative threshold (positive for uptrend)\n            \"msw_buy_sine_d_threshold\": 0.0,  # MSW Buy sine derivative threshold (positive for bullish cycle)\n            \"uo_sell_d_threshold\": 0.0,  # UO Sell derivative threshold (negative for downtrend)\n            \"fosc_sell_d_threshold\": 0.0,  # FO Sell derivative threshold (negative for downtrend)\n            \"msw_sine_sell_d_threshold\": 0.0,  # MSW Sine Sell derivative threshold (negative for bearish cycle)\n        }\n\n        # Optimizer clamps (min, max, strength)\n        self.clamps = [\n            [5, 50, 0.5],  # UO Short Period\n            [5, 50, 0.5],  # UO Medium Period\n            [5, 50, 0.5],  # UO Long Period\n            [5, 50, 0.5],  # FO Period\n            [5, 50, 0.5],  # MSW Period\n            [1, 5, 1],  # Buy Threshold\n            [1, 5, 1],  # Sell Threshold\n            [0, 100, 0.5],  # UO Buy Threshold (oversold)\n            [0, 100, 0.5],  # UO Sell Threshold (overbought)\n            [-100, 0, 0.5],  # FO Buy Threshold (negative for divergence)\n            [0, 100, 0.5],  # FO Sell Threshold (positive for trend following)\n            [-100, 0, 0.5],  # MSW Buy Threshold\n            [0, 100, 0.5],  # MSW Sell Threshold\n            [-1, 1, 0.5],  # UO Buy Derivative Threshold\n            [-1, 1, 0.5],  # FO Buy Derivative Threshold\n            [-1, 1, 0.5],  # MSW Buy Derivative Threshold\n            [-1, 1, 0.5],  # UO Sell Derivative Threshold\n            [-1, 1, 0.5],  # FO Sell Derivative Threshold\n            [-1, 1, 0.5],  # MSW Sell Derivative Threshold\n        ]\n\n    def indicators(self, data):\n        \"\"\"\n        Calculate the indicators used in the strategy.\n        \"\"\"\n        # Ultimate Oscillator (UO)\n        uo = qx.float_period(\n            qx.tu.ultosc,\n            (\n                data[\"high\"],\n                data[\"low\"],\n                data[\"close\"],\n                self.tune[\"uo_short_period\"],\n                self.tune[\"uo_medium_period\"],\n                self.tune[\"uo_long_period\"],\n            ),\n            (3, 4, 5),\n        )\n\n        # Derivative of Ultimate Oscillator (UO)\n        uo_derivative = qx.derivative(uo)\n\n        # Forecast Oscillator (FO)\n        fosc = qx.float_period(\n            qx.tu.fosc, (data[\"close\"], self.tune[\"fosc_period\"]), (1,)\n        )\n\n        # Derivative of Forecast Oscillator (FO)\n        fosc_derivative = qx.derivative(fosc)\n\n        # Mesa Sine Wave (MSW)\n        msw_sine, msw_lead = qx.float_period(\n            qx.tu.msw, (data[\"close\"], self.tune[\"msw_period\"]), (1, 1)\n        )\n\n        # Derivative of Mesa Sine Wave (MSW)\n        msw_sine_derivative = qx.derivative(msw_sine)\n\n        return {\n            \"uo\": uo,\n            \"fosc\": fosc,\n            \"msw_sine\": msw_sine,\n            \"uo_derivative\": uo_derivative,\n            \"fosc_derivative\": fosc_derivative,\n            \"msw_sine_derivative\": msw_sine_derivative,\n        }\n\n    def plot(self, *args):\n        \"\"\"\n        Plot indicators for visual analysis.\n        \"\"\"\n        qx.plot(\n            *args,\n            (\n                (\"uo\", \"Ultimate Oscillator\", \"yellow\", 3, \"Confluence\"),\n                (\"fosc\", \"Forecast Oscillator\", \"green\", 2, \"Confluence\"),\n                (\"msw_sine\", \"MSW Sine\", \"blue\", 2, \"Confluence\"),\n                (\"uo_derivative\", \"UO Derivative\", \"red\", 1, \"Derivative\"),\n                (\"fosc_derivative\", \"FO Derivative\", \"orange\", 1, \"Derivative\"),\n                (\"msw_sine_derivative\", \"MSW Sine Derivative\", \"purple\", 1, \"Derivative\"),\n            ),\n        )\n\n    def strategy(self, state, indicators):\n        \"\"\"\n        Define strategy based on Ultimate Oscillator, Forecast Oscillator, and Mesa Sine Wave with their derivatives.\n        \"\"\"\n        if state[\"last_trade\"] is None:\n            # Enter market with all capital on the first trade\n            return qx.Buy()\n\n        # Buy Signal Criteria\n        if (\n            sum(\n                [\n                    int(indicators[\"uo\"] < self.tune[\"uo_buy_threshold\"]),\n                    int(indicators[\"fosc\"] > self.tune[\"fosc_buy_threshold\"]),\n                    int(indicators[\"msw_sine\"] > self.tune[\"msw_buy_threshold\"]),\n                    int(indicators[\"uo_derivative\"] > self.tune[\"uo_buy_d_threshold\"]),\n                    int(indicators[\"fosc_derivative\"] > self.tune[\"fosc_buy_d_threshold\"]),\n                    int(indicators[\"msw_sine_derivative\"] > self.tune[\"msw_buy_sine_d_threshold\"]),\n                ]\n            )\n            > self.tune[\"buy_threshold\"]\n        ):\n            if isinstance(state[\"last_trade\"], qx.Sell):\n                # Exit short position and enter long with all capital\n                return qx.Buy()\n\n        # Sell Signal Criteria\n        if (\n            sum(\n                [\n                    int(indicators[\"uo\"] > self.tune[\"uo_sell_threshold\"]),\n                    int(indicators[\"fosc\"] < self.tune[\"fosc_sell_threshold\"]),\n                    int(indicators[\"msw_sine\"] < self.tune[\"msw_sell_threshold\"]),\n                    int(indicators[\"uo_derivative\"] < self.tune[\"uo_sell_d_threshold\"]),\n                    int(indicators[\"fosc_derivative\"] < self.tune[\"fosc_sell_d_threshold\"]),\n                    int(indicators[\"msw_sine_derivative\"] < self.tune[\"msw_sine_sell_d_threshold\"]),\n                ]\n            )\n            > self.tune[\"sell_threshold\"]\n        ):\n            if isinstance(state[\"last_trade\"], qx.Buy):\n                # Exit long position and enter short with all capital\n                return qx.Sell()\n\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        \"\"\"\n        Measure fitness of the bot based on ROI, Sortino ratio, and win rate.\n        \"\"\"\n        return [\"roi_gross\", \"sortino_ratio\", \"trade_win_rate\"], {}\n\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2023-01-01\",\n    )\n\n    bot = UltimateForecastMesaBot()\n\n    # Try to load the optimized tune parameters if available\n\n    # Start the bot with backtest data and wallet\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 21:23:20 2025": {
+  "tune": {
+   "uo_short_period": 7.28489733097631,
+   "uo_medium_period": 14.59242813958362,
+   "uo_long_period": 24.72411569197476,
+   "fosc_period": 12.58372115984756,
+   "msw_period": 10.083014820310895,
+   "buy_threshold": 4,
+   "sell_threshold": 1,
+   "uo_buy_threshold": 28.72362000495174,
+   "uo_sell_threshold": 75.34532733681147,
+   "fosc_buy_threshold": -0.000267187783416489,
+   "fosc_sell_threshold": 0.0014270345405443716,
+   "msw_buy_threshold": -0.0007632136275844977,
+   "msw_sell_threshold": 0.0008272636299807236,
+   "uo_buy_d_threshold": -0.0013642149019480814,
+   "fosc_buy_d_threshold": -0.0012432995682696937,
+   "msw_buy_sine_d_threshold": 0.0003041811463557311,
+   "uo_sell_d_threshold": -8.947915203426208e-05,
+   "fosc_sell_d_threshold": 0.0013128372931094914,
+   "msw_sine_sell_d_threshold": 0.000280356626235268
+  },
+  "results": {
+   "roi": 2.207778125942715,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5045045045045045
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:23:20 2025": {
+  "tune": {
+   "uo_short_period": 6.94559328131951,
+   "uo_medium_period": 14.598547775482103,
+   "uo_long_period": 25.98705372139423,
+   "fosc_period": 13.4657963452044,
+   "msw_period": 10.077775317140514,
+   "buy_threshold": 5,
+   "sell_threshold": 1,
+   "uo_buy_threshold": 29.746756704955622,
+   "uo_sell_threshold": 75.06908255577775,
+   "fosc_buy_threshold": -0.0002175421057877768,
+   "fosc_sell_threshold": 0.00037482551685352706,
+   "msw_buy_threshold": -0.000351741357312851,
+   "msw_sell_threshold": 0.0005376824207541142,
+   "uo_buy_d_threshold": -0.0012186970219638267,
+   "fosc_buy_d_threshold": -0.0006858773136999431,
+   "msw_buy_sine_d_threshold": 2.7483976338266274e-05,
+   "uo_sell_d_threshold": -0.00018775218336594592,
+   "fosc_sell_d_threshold": 0.00012398772363242472,
+   "msw_sine_sell_d_threshold": 0.00011422865943747497
+  },
+  "results": {
+   "roi": 1.9150764082072227,
+   "sortino_ratio": 0.8650764082072226,
+   "trade_win_rate": 1.0
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:23:20 2025": {
+  "tune": {
+   "uo_short_period": 6.999999999999999,
+   "uo_medium_period": 14.596803142043882,
+   "uo_long_period": 27.598075020150333,
+   "fosc_period": 14.0,
+   "msw_period": 10.0,
+   "buy_threshold": 5,
+   "sell_threshold": 2,
+   "uo_buy_threshold": 29.109961921401386,
+   "uo_sell_threshold": 72.40604429063679,
+   "fosc_buy_threshold": 0.00019106382448986098,
+   "fosc_sell_threshold": -3.217424913246447e-05,
+   "msw_buy_threshold": 0.0,
+   "msw_sell_threshold": -0.0002004710752423653,
+   "uo_buy_d_threshold": -0.0004810096694161035,
+   "fosc_buy_d_threshold": -0.0008178625575228822,
+   "msw_buy_sine_d_threshold": 5.9574076015024715e-05,
+   "uo_sell_d_threshold": 5.6923120838622275e-05,
+   "fosc_sell_d_threshold": -0.0006656373495496455,
+   "msw_sine_sell_d_threshold": -0.0002647140261944575
+  },
+  "results": {
+   "roi": 1.874752204648928,
+   "sortino_ratio": 0.824752204648928,
+   "trade_win_rate": 1.0
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 21:25:21 2025": {
+  "tune": {
+   "uo_short_period": 7.28489733097631,
+   "uo_medium_period": 14.592428139583618,
+   "uo_long_period": 24.482023852879873,
+   "fosc_period": 12.58372115984756,
+   "msw_period": 10.083014820310895,
+   "buy_threshold": 4,
+   "sell_threshold": 3,
+   "uo_buy_threshold": 29.077688705348994,
+   "uo_sell_threshold": 75.34532733681147,
+   "fosc_buy_threshold": -0.000267187783416489,
+   "fosc_sell_threshold": 0.0014270345405443716,
+   "msw_buy_threshold": -0.0007632136275844977,
+   "msw_sell_threshold": 0.0008272636299807236,
+   "uo_buy_d_threshold": -0.0011793334132720234,
+   "fosc_buy_d_threshold": -0.001404062023247297,
+   "msw_buy_sine_d_threshold": 0.0003041811463557311,
+   "uo_sell_d_threshold": -0.0004151439623507747,
+   "fosc_sell_d_threshold": 0.0013128372931094914,
+   "msw_sine_sell_d_threshold": 0.000280356626235268
+  },
+  "results": {
+   "roi": 2.9319168319475297,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.7692307692307693
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:25:21 2025": {
+  "tune": {
+   "uo_short_period": 7.215026144297093,
+   "uo_medium_period": 14.818173675132083,
+   "uo_long_period": 23.860635695547742,
+   "fosc_period": 12.925484499054136,
+   "msw_period": 10.534044222106878,
+   "buy_threshold": 4,
+   "sell_threshold": 4,
+   "uo_buy_threshold": 29.39638752282434,
+   "uo_sell_threshold": 74.38110393061004,
+   "fosc_buy_threshold": -5.150346088194947e-05,
+   "fosc_sell_threshold": 0.001788874626310786,
+   "msw_buy_threshold": -0.00042579684083214966,
+   "msw_sell_threshold": 0.0011167155917228,
+   "uo_buy_d_threshold": -0.0009716419132135805,
+   "fosc_buy_d_threshold": -0.001392278685809632,
+   "msw_buy_sine_d_threshold": 1.8008982551985894e-05,
+   "uo_sell_d_threshold": 1.2168123342541817e-05,
+   "fosc_sell_d_threshold": 0.0010283140679497311,
+   "msw_sine_sell_d_threshold": -4.159711035232836e-05
+  },
+  "results": {
+   "roi": 2.4045064356925665,
+   "sortino_ratio": 1.3349660284440654,
+   "trade_win_rate": 1.0
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:25:21 2025": {
+  "tune": {
+   "uo_short_period": 7.373807321456031,
+   "uo_medium_period": 14.627277168126191,
+   "uo_long_period": 24.10718779849243,
+   "fosc_period": 12.58372115984756,
+   "msw_period": 10.135698889451369,
+   "buy_threshold": 5,
+   "sell_threshold": 3,
+   "uo_buy_threshold": 29.11330343978561,
+   "uo_sell_threshold": 75.34532733681147,
+   "fosc_buy_threshold": -0.000267187783416489,
+   "fosc_sell_threshold": 0.001216758772726343,
+   "msw_buy_threshold": -0.0004257968408321496,
+   "msw_sell_threshold": 0.0008272636299807238,
+   "uo_buy_d_threshold": -0.0011584435715846979,
+   "fosc_buy_d_threshold": -0.0005582627615165056,
+   "msw_buy_sine_d_threshold": 0.00016931971193128215,
+   "uo_sell_d_threshold": -2.9376844547742543e-05,
+   "fosc_sell_d_threshold": 0.0013128372931094914,
+   "msw_sine_sell_d_threshold": 0.000280356626235268
+  },
+  "results": {
+   "roi": 1.4052950416886871,
+   "sortino_ratio": 0.3552950416886871,
+   "trade_win_rate": 1.0
+  }
+ }
+}

@@ -1,0 +1,54 @@
+{
+ "source": "import math\nimport time\n\nimport numpy as np\nimport qtradex as qx\n\n\nclass ConfluenceBot(qx.BaseBot):\n    def __init__(self):\n        # Default tuning values (periods for EMAs, RSI, MACD, Bollinger Bands)\n        self.tune = {\n            \"ma1_period\": 5.0,  # Short-term EMA\n            \"ma2_period\": 20.0,  # Long-term EMA\n            \"rsi_period\": 14.0,  # RSI period\n            \"macd_fast_period\": 12.0,  # MACD fast period\n            \"macd_slow_period\": 26.0,  # MACD slow period\n            \"macd_signal_period\": 9.0,  # MACD signal period\n            \"bollinger_period\": 20.0,  # Bollinger Bands period\n            \"bollinger_stddev\": 2.0,  # Bollinger Bands standard deviation\n        }\n        # Optimizer clamps (min, max, strength)\n        self.clamps = [\n            [5, 100, 0.5],  # For ma1\n            [10, 150, 0.6],  # For ma2\n            [5, 30, 0.5],  # For RSI\n            [5, 50, 0.6],  # For MACD periods\n            [5, 50, 0.6],  # For MACD periods\n            [5, 50, 0.6],  # For MACD periods\n            [10, 50, 0.5],  # For Bollinger Bands period\n            [1, 3, 0.5],  # For Bollinger Bands standard deviation\n        ]\n\n    def indicators(self, data):\n        \"\"\"\n        Calculate the indicators used in the strategy.\n        \"\"\"\n        # EMA Crossovers\n        ma1 = qx.float_period(qx.tu.ema, (data[\"close\"], self.tune[\"ma1_period\"]), (1,))\n        ma2 = qx.float_period(qx.tu.ema, (data[\"close\"], self.tune[\"ma2_period\"]), (1,))\n\n        # RSI\n        rsi = qx.float_period(qx.tu.rsi, (data[\"close\"], self.tune[\"rsi_period\"]), (1,))\n\n        # MACD\n        macd_line, macd_signal, macd_histogram = qx.float_period(\n            qx.tu.macd,\n            (\n                data[\"close\"],\n                self.tune[\"macd_fast_period\"],\n                self.tune[\"macd_slow_period\"],\n                self.tune[\"macd_signal_period\"],\n            ),\n            (1, 1, 1),\n        )\n\n        # Bollinger Bands\n        bollinger_upper, bollinger_middle, bollinger_lower = qx.float_period(\n            qx.tu.bbands,\n            (\n                data[\"close\"],\n                self.tune[\"bollinger_period\"],\n                self.tune[\"bollinger_stddev\"],\n            ),\n            (1, 1, 1),\n        )\n\n        # Volume (default to simple volume)\n        volume = qx.float_period(\n            qx.tu.sma, (data[\"volume\"], self.tune[\"bollinger_period\"]), (1,)\n        )\n\n        return {\n            \"ma1\": ma1,\n            \"ma2\": ma2,\n            \"rsi\": rsi,\n            \"macd_histogram\": macd_histogram,\n            \"bollinger_upper\": bollinger_upper,\n            \"bollinger_lower\": bollinger_lower,\n            \"volume\": volume,\n        }\n\n    def plot(self, *args):\n        \"\"\"\n        Plot indicators for visual analysis.\n        \"\"\"\n        qx.plot(\n            *args,\n            (\n                (\"ma1\", \"EMA 1\", \"white\", 0, \"Confluence\"),\n                (\"ma2\", \"EMA 2\", \"cyan\", 0, \"Confluence\"),\n                (\"bollinger_upper\", \"Bollinger Upper\", \"blue\", 0, \"Confluence\"),\n                (\"bollinger_lower\", \"Bollinger Lower\", \"blue\", 0, \"Confluence\"),\n                (\"rsi\", \"RSI\", \"green\", 1, \"RSI\"),\n                (\"macd_histogram\", \"MACD Histogram\", \"orange\", 2, \"MACD\"),\n            ),\n        )\n\n    def strategy(self, state, indicators):\n        \"\"\"\n        Define strategy based on EMA crossovers, RSI, MACD, Bollinger Bands, and Volume.\n        \"\"\"\n        if state[\"last_trade\"] is None:\n            # Enter market with all capital on the first trade\n            return qx.Buy()\n\n        # Relaxed Buy Signal Criteria (Buy near the lower Bollinger Band and check for bullish momentum)\n        if (\n            indicators[\"ma1\"] > indicators[\"ma2\"]  # Short EMA above Long EMA\n            and indicators[\"rsi\"] < 70  # RSI is not in overbought region\n            and indicators[\"macd_histogram\"] > 0  # Positive MACD histogram (momentum)\n            and state[\"close\"]\n            < indicators[\n                \"bollinger_lower\"\n            ]  # Price near or below Bollinger Band lower bound\n        ):\n            if isinstance(state[\"last_trade\"], qx.Sell):\n                # Exit short position and enter long with all capital\n                return qx.Buy()\n\n        # Relaxed Sell Signal Criteria (Sell near the upper Bollinger Band and check for bearish momentum)\n        if (\n            indicators[\"ma1\"] < indicators[\"ma2\"]  # Short EMA below Long EMA\n            and indicators[\"rsi\"] > 30  # RSI is not in oversold region\n            and indicators[\"macd_histogram\"] < 0  # Negative MACD histogram (momentum)\n            and state[\"close\"]\n            > indicators[\n                \"bollinger_upper\"\n            ]  # Price near or above Bollinger Band upper bound\n        ):\n            if isinstance(state[\"last_trade\"], qx.Buy):\n                # Exit long position and enter short with all capital\n                return qx.Sell()\n\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        \"\"\"\n        Measure fitness of the bot based on ROI, Sortino ratio, and win rate.\n        \"\"\"\n        return [\"roi_gross\", \"sortino_ratio\", \"trade_win_rate\"], {}\n\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2023-01-01\",\n    )\n\n    bot = ConfluenceBot()\n\n    # Try to load the optimized tune parameters if available\n\n    # Start the bot with backtest data and wallet\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 21:09:08 2025": {
+  "tune": {
+   "ma1_period": 4.990480354255192,
+   "ma2_period": 19.616897157034387,
+   "rsi_period": 12.6316471443763,
+   "macd_fast_period": 12.866366606675843,
+   "macd_slow_period": 24.27394320117833,
+   "macd_signal_period": 8.495206610634002,
+   "bollinger_period": 20.61324652286671,
+   "bollinger_stddev": 1.8392143324399344
+  },
+  "results": {
+   "roi": 1.013403945250202,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.36764705882352944
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:09:08 2025": {
+  "tune": {
+   "ma1_period": 5.0,
+   "ma2_period": 20.0,
+   "rsi_period": 14.0,
+   "macd_fast_period": 12.0,
+   "macd_slow_period": 26.0,
+   "macd_signal_period": 9.0,
+   "bollinger_period": 20.0,
+   "bollinger_stddev": 2.0
+  },
+  "results": {
+   "roi": 0.5765585304491202,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.3181818181818182
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:09:08 2025": {
+  "tune": {
+   "ma1_period": 4.93318647897275,
+   "ma2_period": 19.4520479098931,
+   "rsi_period": 12.836380499812453,
+   "macd_fast_period": 13.0256000340024,
+   "macd_slow_period": 23.39263499180547,
+   "macd_signal_period": 8.518805613590992,
+   "bollinger_period": 20.61324652286671,
+   "bollinger_stddev": 1.8789112707324607
+  },
+  "results": {
+   "roi": 0.8773604456675037,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.3709558823529412
+  }
+ }
+}

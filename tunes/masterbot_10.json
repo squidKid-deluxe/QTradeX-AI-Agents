@@ -1,0 +1,60 @@
+{
+ "source": "\"\"\"\n\u2554\u2550\u2557\u2554\u2566\u2557\u2566\u2550\u2557\u2554\u2550\u2557\u2554\u2566\u2557\u2554\u2550\u2557\u2550\u2557 \u2566\n\u2551\u2550\u256c\u2557\u2551 \u2560\u2566\u255d\u2560\u2550\u2563 \u2551\u2551\u2551\u2563 \u2554\u2569\u2566\u255d\n\u255a\u2550\u255d\u255a\u2569 \u2569\u255a\u2550\u2569 \u2569\u2550\u2569\u255d\u255a\u2550\u255d\u2569 \u255a\u2550\n\nmasterbot.py\n\nMasterbot - A Powerful MACD*RSI*STOCH*ATR Trading Strategy\n\nIndicators:\n\n- **MACD (Moving Average Convergence Divergence)**:\n  - The MACD is used to identify trend direction and momentum by comparing the difference \n  between two exponential moving averages (EMAs). \n  The bot uses the MACD line and the signal line to generate buy and sell signals.\n\n- **RSI (Relative Strength Index)**:\n  - The RSI is a momentum oscillator that measures the speed and change of price movements. \n  It ranges from 0 to 100 and is typically used to identify overbought or oversold conditions. \n  The bot uses the RSI to confirm entry signals.\n\n- **Stochastic Oscillator**:\n  - The Stochastic Oscillator compares a particular closing price of an asset\n   to a range of its prices over a certain period. \n   The bot uses both %K and %D lines to determine potential reversal points in the market.\n\n- **ATR (Average True Range)**:\n  - The ATR is a measure of market volatility. \n  The bot uses the ATR to set dynamic stop loss and take profit levels, \n  allowing for better risk management based on current market conditions.\n\nStrategy:\n\n**Entry Conditions**:\n   - A **Buy** signal is generated when:\n     - The MACD line crosses above the signal line.\n     - The Stochastic %K is above 50.\n     - The RSI is above 50.\n   - A **Sell** signal is generated when:\n     - The MACD line crosses below the signal line.\n     - The Stochastic %K is below 50.\n     - The RSI is below 50.\n\n**Exit Conditions**:\n   - The bot defines exit conditions based on the following:\n     - For long positions, exit if:\n       - The MACD line crosses below the signal line.\n       - The current price falls below the average position price minus the ATR-based stop loss.\n       - The current price rises above the average position price plus the ATR-based take profit.\n     - For short positions, exit if:\n       - The MACD line crosses above the signal line.\n       - The current price rises above the average position price plus the ATR-based stop loss.\n       - The current price falls below the average position price minus the ATR-based take profit.\n\nhttps://www.tradingview.com/script/pOT16FZ5-Powerfull-strategy-MACD-RSI-STOCH-ATR-stop-best-on-Crude-Oil/\n\"\"\"\n\n\nimport math\nimport time\n\nimport qtradex as qx\n\n\nclass MasterBot(qx.BaseBot):\n    def __init__(self):\n        # Strategy Parameters\n        self.tune = {\n            \"macd_fast_period\": 12.0,  # MACD Fast length\n            \"macd_slow_period\": 26.0,  # MACD Slow length\n            \"macd_signal_period\": 9.0,  # MACD Signal line length\n            \"k_period\": 14.1,\n            \"k_slowing\": 9.0,\n            \"d_period\": 9.0,\n            \"rsi_period\": 14.0,  # RSI Length\n            \"atr_period\": 14.0,  # ATR Length for stop loss and take profit calculation\n            \"tp_multiplier\": 6.0,  # Take profit multiplier (ATR)\n            \"sl_multiplier\": 2.0,  # Stop loss multiplier (ATR)\n        }\n\n        self.clamps = [\n            [5, 100, 0.5],\n            [5, 100, 0.5],\n            [5, 100, 0.5],\n            [5, 100, 0.5],\n            [5, 100, 0.5],\n            [5, 100, 0.5],\n            [5, 100, 0.5],\n            [2, 100, 0.5],\n            [2, 100, 0.5],\n            [2, 100, 0.5],\n        ]\n\n\n\n    def indicators(self, data):\n        \"\"\"\n        Calculate indicators using QX's indicator library (EMA, RSI, Stochastic, ATR).\n        \"\"\"\n        macd_line, macd_signal, _ = qx.float_period(\n            qx.tu.macd,\n            (\n                data[\"close\"],\n                self.tune[\"macd_fast_period\"],\n                self.tune[\"macd_slow_period\"],\n                self.tune[\"macd_signal_period\"],\n            ),\n            (1, 2, 3),\n        )\n        stoch_k, stoch_d = qx.float_period(\n            qx.tu.stoch,\n            (\n                data[\"close\"],\n                data[\"high\"],\n                data[\"low\"],\n                self.tune[\"k_period\"],\n                self.tune[\"k_slowing\"],\n                self.tune[\"d_period\"],\n            ),\n            (3, 4, 5),\n        )\n        rsi = qx.float_period(qx.tu.rsi, (data[\"close\"], self.tune[\"rsi_period\"]), (1,))\n        atr = qx.float_period(\n            qx.tu.atr,\n            (data[\"high\"], data[\"low\"], data[\"close\"], self.tune[\"atr_period\"]),\n            (3,),\n        )\n        # minlen = map(len(atr))\n        # /data[\"close\"]\n\n        return {\n            \"macd_line\": macd_line,\n            \"macd_signal\": macd_signal,\n            \"rsi\": rsi,\n            \"stoch_k\": stoch_k,\n            \"stoch_d\": stoch_d,\n            \"atr\": atr,\n        }\n\n    def plot(self, *args):\n        \"\"\"\n        Plot the indicators and strategy signals.\n        \"\"\"\n        qx.plot(\n            *args,\n            (\n                (\"macd_line\", \"MACD Line\", \"blue\", 3, \"Main\"),\n                (\"macd_signal\", \"MACD Signal\", \"red\", 3, \"Main\"),\n                (\"stoch_k\", \"Stochastic %K\", \"green\", 1, \"Subplot\"),\n                (\"stoch_d\", \"Stochastic %D\", \"purple\", 1, \"Subplot\"),\n                (\"rsi\", \"RSI\", \"cyan\", 2, \"Subplot\"),\n                (\"atr\", \"ATR\", \"orange\", 3, \"Subplot\"),\n            ),\n        )\n\n    def strategy(self, state, indicators):\n        \"\"\"\n        Define the entry and exit strategy based on MACD, RSI, Stochastic, and ATR.\n        \"\"\"\n        if state[\"last_trade\"] is None:\n            return qx.Buy()\n\n        macd_line = indicators[\"macd_line\"]\n        macd_signal = indicators[\"macd_signal\"]\n        rsi = indicators[\"rsi\"]\n        stoch_k = indicators[\"stoch_k\"]\n        stoch_d = indicators[\"stoch_d\"]\n        atr = indicators[\"atr\"]\n\n        # Define entry conditions for long and short positions\n        long_condition = (macd_line > macd_signal) and (stoch_k > 50) and (rsi > 50)\n        short_condition = (macd_line < macd_signal) and (stoch_k < 50) and (rsi < 50)\n\n        # Define ATR-based stop loss and take profit\n        atr_stop_loss = (atr * self.tune[\"sl_multiplier\"])/state[\"close\"]\n        atr_take_profit = (atr * self.tune[\"tp_multiplier\"])/state[\"close\"]\n\n        # Exit conditions\n        long_exit_condition = (\n            (macd_line < macd_signal)\n            or (state[\"close\"] < state[\"last_trade\"].price - atr_stop_loss)\n            or (state[\"close\"] > state[\"last_trade\"].price + atr_take_profit)\n        )\n        short_exit_condition = (\n            (macd_line > macd_signal)\n            or (state[\"close\"] > state[\"last_trade\"].price + atr_stop_loss)\n            or (state[\"close\"] < state[\"last_trade\"].price - atr_take_profit)\n        )\n\n        # Entry signals\n        if long_condition and isinstance(state[\"last_trade\"], qx.Sell):\n            return qx.Buy()\n        elif short_condition and isinstance(state[\"last_trade\"], qx.Buy):\n            return qx.Sell()\n\n        # Exit signals\n        if long_exit_condition and isinstance(state[\"last_trade\"], qx.Buy):\n            return qx.Sell()\n        elif short_exit_condition and isinstance(state[\"last_trade\"], qx.Sell):\n            return qx.Buy()\n\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_gross\",\n            \"sortino_ratio\",\n            \"trade_win_rate\",\n        ], {}\n\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2023-01-01\",\n    )\n    bot = MasterBot()\n    # try:\n    #     bot.tune = qx.load_tune(bot, \"BEST ROI TUNE\")\n    # except:\n    #     print(\"Failed to load tune\")\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 21:11:42 2025": {
+  "tune": {
+   "macd_fast_period": 12.0,
+   "macd_slow_period": 25.058689081357787,
+   "macd_signal_period": 9.0,
+   "k_period": 13.809474639771782,
+   "k_slowing": 8.895964927156433,
+   "d_period": 9.0,
+   "rsi_period": 13.864021495303543,
+   "atr_period": 14.0,
+   "tp_multiplier": 5.9535112499674,
+   "sl_multiplier": 2.0
+  },
+  "results": {
+   "roi": 1.0077186240317242,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5091463414634146
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:11:42 2025": {
+  "tune": {
+   "macd_fast_period": 12.0,
+   "macd_slow_period": 26.0,
+   "macd_signal_period": 9.0,
+   "k_period": 14.1,
+   "k_slowing": 9.0,
+   "d_period": 9.0,
+   "rsi_period": 14.0,
+   "atr_period": 14.0,
+   "tp_multiplier": 6.0,
+   "sl_multiplier": 2.0
+  },
+  "results": {
+   "roi": 0.9801192415282552,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5076452599388379
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:11:42 2025": {
+  "tune": {
+   "macd_fast_period": 11.57863591329724,
+   "macd_slow_period": 23.631347427343727,
+   "macd_signal_period": 9.155800979816977,
+   "k_period": 14.924375475466292,
+   "k_slowing": 8.764875189557067,
+   "d_period": 8.153859987359635,
+   "rsi_period": 13.845913550131618,
+   "atr_period": 14.081682588478905,
+   "tp_multiplier": 6.3472435491085655,
+   "sl_multiplier": 1.9999450859145644
+  },
+  "results": {
+   "roi": 1.0077186240317242,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.5091463414634145
+  }
+ }
+}

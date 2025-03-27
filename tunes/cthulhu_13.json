@@ -1,0 +1,153 @@
+{
+ "source": "\"\"\"\n\u2554\u2550\u2557\u2554\u2566\u2557\u2566\u2550\u2557\u2554\u2550\u2557\u2554\u2566\u2557\u2554\u2550\u2557\u2550\u2557 \u2566\n\u2551\u2550\u256c\u2557\u2551 \u2560\u2566\u255d\u2560\u2550\u2563 \u2551\u2551\u2551\u2563 \u2554\u2569\u2566\u255d\n\u255a\u2550\u255d\u255a\u2569 \u2569\u255a\u2550\u2569 \u2569\u2550\u2569\u255d\u255a\u2550\u255d\u2569 \u255a\u2550\n\ncthulhu.py\n\nIndicators:\n1. **Exponential Moving Average (EMA)**:\n   - The bot calculates the 14-period EMA (`ma0`) for trend tracking. \n   The EMA is a weighted moving average that gives more weight to recent prices.\n   - `ma1` is a shifted version of `ma0` used for comparing price movements.\n\n2. **Standard Deviation (Std)**:\n   - The bot calculates the 14-period standard deviation (`std`) of the closing price, \n   which is used to measure price volatility.\n   - This helps define the upper and lower bounds (channel) around the EMA.\n\n3. **Upper and Lower Channels**:\n   - The upper and lower bands are calculated as:\n     - Upper Channel = EMA + (Upper Deviations * Std)\n     - Lower Channel = EMA - (Lower Deviations * Std)\n   - These bands are used for channel trading, \n   signaling buy and sell opportunities when the price moves outside of these bands.\n\n4. **Parabolic SAR (PSAR)**:\n   - The bot uses the Parabolic SAR to track the market trend. \n   The PSAR values (`sar0` and `sar1`) help identify trend reversals, \n   signaling potential buy or sell opportunities when the SAR crosses the EMA.\n\nStrategy:\n1. **Channel Trading**:\n   - If the price is within the channel (i.e., `diff` is less than the specified threshold `channel`), \n   the bot checks if the price is lower than the lower channel (buy condition) \n   or higher than the upper channel (sell condition).\n   - **qx.Buy Signal**: Price * `channel_buy_factor` < Lower Channel\n   - **qx.Sell Signal**: Price * `channel_sell_factor` > Upper Channel\n\n2. **Trending Market**:\n   - If the price is trending (i.e., `diff` is greater than the `channel` threshold), \n   the bot checks if the price is above or below the EMA.\n   - **qx.Buy Signal**: Price * `trend_buy_factor` > EMA\n   - **qx.Sell Signal**: Price * `trend_sell_factor` < EMA\n\n3. **Trend Reversal (SAR)**:\n   - If the Parabolic SAR crosses the EMA (either from below to above or vice versa), \n   it signals a potential trend reversal.\n   - **qx.Buy Signal**: SAR < EMA and previous SAR > previous EMA\n   - **qx.Sell Signal**: SAR > EMA and previous SAR < previous EMA\n\n4. **Breakout**:\n   - The bot also checks for breakouts when the price moves above or below the EMA.\n   - **qx.Buy Signal**: Price * `breakout_buy_factor` > EMA\n   - **qx.Sell Signal**: Price * `breakout_sell_factor` < EMA\n\"\"\"\n\n\nimport qtradex as qx\n\n\nclass Cthulhu(qx.BaseBot):\n    def __init__(self):\n        # Initialize your tune parameters (similar to the original 'tune' dictionary)\n        self.tune = {\n            \"ema_period\": 14.0,\n            \"std_period\": 14.0,\n            \"upper_deviations\": 2.0,\n            \"lower_deviations\": 2.0,\n            \"channel_buy_factor\": 0.9,\n            \"channel_sell_factor\": 1.1,\n            \"trend_buy_factor\": 1.1,\n            \"trend_sell_factor\": 0.9,\n            \"breakout_buy_factor\": 1.05,\n            \"breakout_sell_factor\": 0.95,\n            \"sar_accel\": 0.02,\n            \"sar_max\": 0.2,\n            \"channel\": 0.01,\n        }\n\n        # roi_assets       1.981\n        # roi_currency     4.324\n        # roi              2.926\n        # cagr             0.743\n        # maximum_drawdown -0.669\n        # trade_win_rate   0.517\n        self.tune = {\n            \"ema_period\": 11.242841465078834,\n            \"std_period\": 8.536103551596769,\n            \"upper_deviations\": 2.393422823609405,\n            \"lower_deviations\": 1.737179096769318,\n            \"channel_buy_factor\": 0.7693519050740965,\n            \"channel_sell_factor\": 1.534779361599441,\n            \"trend_buy_factor\": 0.9425493672682609,\n            \"trend_sell_factor\": 0.9017402529260498,\n            \"breakout_buy_factor\": 0.9214726149062078,\n            \"breakout_sell_factor\": 1.7507453297825712,\n            \"sar_accel\": 0.012512094500803643,\n            \"sar_max\": 0.15914783447408798,\n            \"channel\": 0.007804265383666103,\n        }\n\n        self.clamps = [\n            # periods\n            [5, 100, 0.5],\n            [5, 100, 0.5],\n            # deviations\n            [1.0, 4.0, 0.5],\n            [1.0, 4.0, 0.5],\n            # coefficients\n            [0.5, 2.0, 0.5],\n            [0.5, 2.0, 0.5],\n            [0.5, 2.0, 0.5],\n            [0.5, 2.0, 0.5],\n            [0.5, 2.0, 0.5],\n            [0.5, 2.0, 0.5],\n            # parabolic sar\n            [0.0001, 0.2, 0.5],\n            [0.0001, 0.2, 0.5],\n            # channel\n            [0.0001, 0.2, 0.5],\n        ]\n        \n\n    def indicators(self, data):\n        metrics = {}\n\n        # Example for moving average (use QX's built-in indicators like EMA or SMA)\n        metrics[\"ma0\"] = qx.float_period(qx.tu.ema, (data[\"close\"], self.tune[\"ema_period\"]), (1,))\n        metrics[\"ma1\"] = metrics[\"ma0\"][:-1]\n        metrics[\"std\"] = qx.float_period(\n            qx.tu.stddev, (data[\"close\"], self.tune[\"std_period\"]), (1,)\n        )\n\n        metrics[\"ma0\"], metrics[\"ma1\"], metrics[\"std\"] = qx.truncate(metrics[\"ma0\"], metrics[\"ma1\"], metrics[\"std\"])\n\n        metrics[\"upper\"] = (\n            metrics[\"ma0\"] + self.tune[\"upper_deviations\"] * metrics[\"std\"]\n        )  # Upper channel (example)\n        metrics[\"lower\"] = (\n            metrics[\"ma0\"] - self.tune[\"lower_deviations\"] * metrics[\"std\"]\n        )  # Lower channel (example)\n\n        # Difference for channel trading logic\n        metrics[\"diff\"] = metrics[\"upper\"] - metrics[\"lower\"]\n\n        # Parabolic SAR (example, adjust according to your requirements)\n        metrics[\"sar0\"] = qx.tu.psar(\n            data[\"high\"], data[\"low\"], self.tune[\"sar_accel\"], self.tune[\"sar_max\"]\n        )\n        metrics[\"sar1\"] = metrics[\"sar0\"][:-1]\n\n        return metrics\n\n    def plot(self, *args):\n        qx.plot(\n            *args,\n            (\n                # key, name, color, index, title\n                (\"upper\", \"Upper Band\", \"white\", 0, \"Main\"),\n                (\"lower\", \"Lower Band\", \"white\", 0, \"Main\"),\n                (\"ma0\", \"Middle Band\", \"cyan\", 0, \"Main\"),\n                (\"sar0\", \"Parabolic SAR\", \"yellow\", 0, \"Main\"),\n            ),\n        )\n\n    def strategy(self, tick_info, indicators):\n        # Extracting values from the indicators and tune\n        ma0 = indicators[\"ma0\"]\n        ma1 = indicators[\"ma1\"]\n        std = indicators[\"std\"]\n        upper = indicators[\"upper\"]\n        lower = indicators[\"lower\"]\n        price = tick_info[\"close\"]\n        diff = indicators[\"diff\"]\n        sar0 = indicators[\"sar0\"]\n        sar1 = indicators[\"sar1\"]\n\n        channel_buy_factor = self.tune[\"channel_buy_factor\"]\n        channel_sell_factor = self.tune[\"channel_sell_factor\"]\n        trend_buy_factor = self.tune[\"trend_buy_factor\"]\n        trend_sell_factor = self.tune[\"trend_sell_factor\"]\n        breakout_buy_factor = self.tune[\"breakout_buy_factor\"]\n        breakout_sell_factor = self.tune[\"breakout_sell_factor\"]\n        channel = self.tune[\"channel\"]\n\n        # PRICE IS CHANNELED:\n        if diff < channel:\n            if channel_buy_factor * price < lower[0]:\n                return qx.Buy()\n            elif channel_sell_factor * price > upper[0]:\n                return qx.Sell()\n\n        # PRICE IS TRENDING:\n        else:\n            if trend_buy_factor * price > ma0:\n                return qx.Buy()\n            elif trend_sell_factor * price < ma0:\n                return qx.Sell()\n\n        # TREND IS ENDING:\n        if sar0 < ma0 and sar1 > ma1:\n            return qx.Buy()\n\n        if sar0 > ma0 and sar1 < ma1:\n            return qx.Sell()\n\n        # HOLDING:\n        if breakout_buy_factor * price > ma0:\n            return qx.Buy()\n        elif breakout_sell_factor * price < ma0:\n            return qx.Sell()\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_assets\",\n            \"roi_currency\",\n            \"roi\",\n            \"cagr\",\n            \"sortino\",\n            \"maximum_drawdown\",\n            \"trade_win_rate\",\n        ], {}\n\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2023-01-01\",\n    )\n\n    bot = Cthulhu()\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI_ASSETS TUNE_Wed Mar 26 21:04:32 2025": {
+  "tune": {
+   "ema_period": 11.03607437026903,
+   "std_period": 8.038455040598784,
+   "upper_deviations": 2.345273084650907,
+   "lower_deviations": 1.6066873928824414,
+   "channel_buy_factor": 0.8477541778181418,
+   "channel_sell_factor": 1.5095834484595652,
+   "trend_buy_factor": 0.8999619260998402,
+   "trend_sell_factor": 0.8986336268504105,
+   "breakout_buy_factor": 0.8640313038892983,
+   "breakout_sell_factor": 1.7836276038246925,
+   "sar_accel": 0.011684614257960878,
+   "sar_max": 0.16151815455360363,
+   "channel": 0.007792151673447816
+  },
+  "results": {
+   "roi_assets": 1.3665866316798008,
+   "roi_currency": 3.983937432222645,
+   "roi": 2.3333228744269876,
+   "cagr": 0.5865870479560631,
+   "maximum_drawdown": -0.6169796847971438,
+   "trade_win_rate": 0.47058823529411764
+  }
+ },
+ "BEST ROI_CURRENCY TUNE_Wed Mar 26 21:04:32 2025": {
+  "tune": {
+   "ema_period": 11.03607437026903,
+   "std_period": 8.038455040598784,
+   "upper_deviations": 2.345273084650907,
+   "lower_deviations": 1.6066873928824414,
+   "channel_buy_factor": 0.8477541778181418,
+   "channel_sell_factor": 1.5095834484595652,
+   "trend_buy_factor": 0.8999619260998402,
+   "trend_sell_factor": 0.8986336268504105,
+   "breakout_buy_factor": 0.8640313038892983,
+   "breakout_sell_factor": 1.7836276038246925,
+   "sar_accel": 0.011684614257960878,
+   "sar_max": 0.16151815455360363,
+   "channel": 0.007792151673447816
+  },
+  "results": {
+   "roi_assets": 1.366586631679801,
+   "roi_currency": 3.9839374322226444,
+   "roi": 2.3333228744269876,
+   "cagr": 0.5865870479560631,
+   "maximum_drawdown": -0.6169796847971438,
+   "trade_win_rate": 0.47058823529411764
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 21:04:32 2025": {
+  "tune": {
+   "ema_period": 11.03607437026903,
+   "std_period": 8.062127373789972,
+   "upper_deviations": 2.345273084650907,
+   "lower_deviations": 1.6066873928824414,
+   "channel_buy_factor": 0.8477541778181418,
+   "channel_sell_factor": 1.5095834484595652,
+   "trend_buy_factor": 0.8999619260998402,
+   "trend_sell_factor": 0.8986336268504105,
+   "breakout_buy_factor": 0.8690153093339162,
+   "breakout_sell_factor": 1.7836276038246925,
+   "sar_accel": 0.011684614257960878,
+   "sar_max": 0.16151815455360363,
+   "channel": 0.007876367085077694
+  },
+  "results": {
+   "roi_assets": 1.366586631679801,
+   "roi_currency": 3.983937432222645,
+   "roi": 2.3333228744269876,
+   "cagr": 0.5865870479560631,
+   "maximum_drawdown": -0.6169796847971438,
+   "trade_win_rate": 0.47058823529411764
+  }
+ },
+ "BEST CAGR TUNE_Wed Mar 26 21:04:32 2025": {
+  "tune": {
+   "ema_period": 11.03607437026903,
+   "std_period": 8.284652199622267,
+   "upper_deviations": 2.345273084650907,
+   "lower_deviations": 1.6066873928824414,
+   "channel_buy_factor": 0.8477541778181418,
+   "channel_sell_factor": 1.5095834484595652,
+   "trend_buy_factor": 0.8999619260998402,
+   "trend_sell_factor": 0.8986336268504105,
+   "breakout_buy_factor": 0.8674441901602551,
+   "breakout_sell_factor": 1.7836276038246925,
+   "sar_accel": 0.011684614257960878,
+   "sar_max": 0.16151815455360363,
+   "channel": 0.008583658721741307
+  },
+  "results": {
+   "roi_assets": 1.366586631679801,
+   "roi_currency": 3.983937432222645,
+   "roi": 2.3333228744269876,
+   "cagr": 0.5865870479560631,
+   "maximum_drawdown": -0.6169796847971438,
+   "trade_win_rate": 0.47058823529411764
+  }
+ },
+ "BEST MAXIMUM_DRAWDOWN TUNE_Wed Mar 26 21:04:32 2025": {
+  "tune": {
+   "ema_period": 11.182999694110755,
+   "std_period": 8.446411546480187,
+   "upper_deviations": 2.4037974202127583,
+   "lower_deviations": 1.6870689179181895,
+   "channel_buy_factor": 0.7657791350607115,
+   "channel_sell_factor": 1.5347793615994405,
+   "trend_buy_factor": 0.9984730076148398,
+   "trend_sell_factor": 0.8773408219659149,
+   "breakout_buy_factor": 0.8598687305579347,
+   "breakout_sell_factor": 1.7536819594641315,
+   "sar_accel": 0.011353587572079656,
+   "sar_max": 0.15822677361459914,
+   "channel": 0.0072816588741623535
+  },
+  "results": {
+   "roi_assets": 0.47204877124538724,
+   "roi_currency": 1.376138713787624,
+   "roi": 0.805980513974535,
+   "cagr": -0.11086471059436065,
+   "maximum_drawdown": -0.3038542284863541,
+   "trade_win_rate": 0.2537313432835821
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:04:32 2025": {
+  "tune": {
+   "ema_period": 10.310409204823513,
+   "std_period": 7.186557997750839,
+   "upper_deviations": 2.571794633564654,
+   "lower_deviations": 1.487428722557103,
+   "channel_buy_factor": 0.8096724784904235,
+   "channel_sell_factor": 1.4616820951732055,
+   "trend_buy_factor": 0.8850630149761587,
+   "trend_sell_factor": 0.9000347144471096,
+   "breakout_buy_factor": 0.8749963806706229,
+   "breakout_sell_factor": 1.6644206828190748,
+   "sar_accel": 0.01224028597274886,
+   "sar_max": 0.1683810249581894,
+   "channel": 0.0073023200382407935
+  },
+  "results": {
+   "roi_assets": 1.1364075205567068,
+   "roi_currency": 3.391495794340761,
+   "roi": 1.9631916173988935,
+   "cagr": 0.44331533300508585,
+   "maximum_drawdown": -0.5557124946525753,
+   "trade_win_rate": 0.5019607843137255
+  }
+ }
+}

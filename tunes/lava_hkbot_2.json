@@ -1,0 +1,36 @@
+{
+ "source": "\"\"\"\n\u2554\u2550\u2557\u2554\u2566\u2557\u2566\u2550\u2557\u2554\u2550\u2557\u2554\u2566\u2557\u2554\u2550\u2557\u2550\u2557 \u2566\n\u2551\u2550\u256c\u2557\u2551 \u2560\u2566\u255d\u2560\u2550\u2563 \u2551\u2551\u2551\u2563 \u2554\u2569\u2566\u255d\n\u255a\u2550\u255d\u255a\u2569 \u2569\u255a\u2550\u2569 \u2569\u2550\u2569\u255d\u255a\u2550\u255d\u2569 \u255a\u2550\n\nlava_hk.py\n\n**Indicators**:\n   - The bot calculates two exponential moving averages (EMAs) with different periods:\n     - `ma1`: A faster-moving average with a period specified by the \"ma1\" tuning parameter.\n     - `ma2`: A slower-moving average with a period specified by the \"ma2\" tuning parameter.\n   - Additionally, the bot computes the OHLC4 value, which is the average of the open, high, low, and close prices.\n\n**Market Mode Selection**:\n   - The bot compares two values, `eq1` (start) and `eq2` (close), to determine the market mode:\n     - **Bullish (1)**: When `eq2` > `eq1`, indicating an upward market trend.\n     - **Bearish (-1)**: When `eq2` < `eq1`, indicating a downward market trend.\n     - **Neutral (0)**: When `eq2` == `eq1`, indicating a stable or sideways market.\n\n\"\"\"\n\n\nimport math\nimport time\n\nimport qtradex as qx\n\n\nclass LavaHK(qx.BaseBot):\n    def __init__(self):\n        # Initialize tuning parameters\n        self.tune = {\n            \"ma1_period\": 12.579159259860445,\n            \"ma2_period\": 15.015159069473613,\n        }\n        # Initialize clamps (if needed for tuning parameters)\n        self.clamps = [\n            [5, 100, 0.5],  # For ma1\n            [10, 150, 0.5],  # For ma2\n        ]\n        \n        self.state = {}  # To store state information (like hkopen, ohlc4, etc.)\n\n\n    def indicators(self, data):\n        \"\"\"\n        Define the indicators using QX's indicators system.\n        \"\"\"\n        ma1 = qx.float_period(\n            qx.tu.ema, (data[\"close\"], self.tune[\"ma1_period\"]), (1,)\n        )\n        ma2 = qx.float_period(\n            qx.tu.ema, (data[\"close\"], self.tune[\"ma2_period\"]), (1,)\n        )\n\n        # OHLC4 calculation\n        ohlc4 = (data[\"open\"] + data[\"high\"] + data[\"low\"] + data[\"close\"]) / 4\n        return {\"ma1\": ma1, \"ma2\": ma2, \"ohlc4\": ohlc4}\n\n    def strategy(self, state, indicators):\n        \"\"\"\n        Decision making: determine whether to buy, sell, or hold.\n        \"\"\"\n        eq1 = indicators[\"ohlc4\"]\n        eq2 = indicators[\"ohlc4\"]  # or use another indicator for comparison if needed\n\n        # Determine market mode\n        if eq2 > eq1:\n            mode = 1  # Bullish\n        elif eq2 < eq1:\n            mode = -1  # Bearish\n        else:\n            mode = 0  # Neutral\n\n        # Example of action decision based on mode and available funds\n        action = 0\n        if mode == 1:  # Bullish\n            if state[\"currency\"] > (eq1 * 0.12):\n                action = 1  # qx.Buy signal\n        elif mode == -1:  # Bearish\n            if state[\"assets\"] > 0.12:\n                action = -1  # qx.Sell signal\n        self.state[\"action\"] = action\n        self.state[\"mode\"] = mode\n\n        # Return qx.Buy/qx.Sell actions\n        if action == 1:\n            return qx.Buy()\n        elif action == -1:\n            return qx.Sell()\n        return None  # No action if conditions are not met\n\n    def plot(self, *args):\n        \"\"\"\n        Plot the indicators for visual feedback.\n        \"\"\"\n        qx.plot(\n            *args,\n            (\n                (\"ma1\", \"MA 1\", \"white\", 0, \"Main\"),\n                (\"ma2\", \"MA 2\", \"cyan\", 0, \"Main\"),\n            ),\n        )\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_gross\",\n            \"sortino_ratio\",\n            \"trade_win_rate\",\n        ], {}\n\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2023-01-01\",\n    )\n\n    bot = LavaHK()\n    try:\n        bot.tune = qx.load_tune(bot, \"BEST ROI TUNE\")\n    except:\n        print(\"Failed to load tune\")\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 21:12:57 2025": {
+  "tune": {
+   "ma1_period": 12.706533128623308,
+   "ma2_period": 20.74587512698983
+  },
+  "results": {
+   "roi": 1.8647607813450615,
+   "sortino_ratio": 0.8147607813450615,
+   "trade_win_rate": 0
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:12:57 2025": {
+  "tune": {
+   "ma1_period": 12.706533128623308,
+   "ma2_period": 20.12915180796341
+  },
+  "results": {
+   "roi": 1.8647607813450615,
+   "sortino_ratio": 0.8147607813450615,
+   "trade_win_rate": 0
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:12:57 2025": {
+  "tune": {
+   "ma1_period": 12.579159259860445,
+   "ma2_period": 15.015159069473613
+  },
+  "results": {
+   "roi": 1.7149830647578834,
+   "sortino_ratio": 0.6649830647578834,
+   "trade_win_rate": 0
+  }
+ }
+}

@@ -1,0 +1,251 @@
+{
+ "source": "\"\"\"\nhttps://www.tradingview.com/pine/?id=PUB%3B591a0eafa317404585a1bb85ee439571\n\n\"\"\"\n\n\nimport math\nimport time\n\nimport numpy as np\nimport qtradex as qx\n\n\nclass MASabres(qx.BaseBot):\n    def __init__(self):\n        # Initial tune values\n        self.tune = {\n            \n            \"ma1_period\": 10.0,\n            \"ma2_period\": 20.0,\n            \"ma3_period\": 30.0,\n            \"ma4_period\": 40.0,\n            \"ma5_period\": 50.0,\n\n\n            \"ma1_type\": 1,\n            \"ma2_type\": 1,\n            \"ma3_type\": 1,\n            \"ma4_type\": 1,\n            \"ma5_type\": 1,\n\n\n\n            \"bear1\": 0.1,\n            \"bear2\": 0.1,\n            \"bear3\": 0.1,\n            \"bear4\": 0.1,\n            \"bear5\": 0.1,\n\n\n            \"bull1\": 0.1,\n            \"bull2\": 0.1,\n            \"bull3\": 0.1,\n            \"bull4\": 0.1,\n            \"bull5\": 0.1,\n\n            \"bullish\": 4.0,\n            \"bearish\": 4.0,\n            \"thresh\": 2.0,\n        }\n\n\n\n\n\n        # Clamps for tuning values\n        self.clamps = [\n            [5, 200, 0.5],  # MA Length clamp\n            [5, 200, 0.5],  # MA Length clamp\n            [5, 200, 0.5],  # MA Length clamp\n            [5, 200, 0.5],  # MA Length clamp\n            [5, 200, 0.5],  # MA Length clamp\n            [0, 11, 1],  # MA Type clamp\n            [0, 11, 1],  # MA Type clamp\n            [0, 11, 1],  # MA Type clamp\n            [0, 11, 1],  # MA Type clamp\n            [0, 11, 1],  # MA Type clamp\n            [-1,1,0.5], # bull/bear slope clamps\n            [-1,1,0.5], # bull/bear slope clamps\n            [-1,1,0.5], # bull/bear slope clamps\n            [-1,1,0.5], # bull/bear slope clamps\n            [-1,1,0.5], # bull/bear slope clamps\n            [-1,1,0.5], # bull/bear slope clamps\n            [-1,1,0.5], # bull/bear slope clamps\n            [-1,1,0.5], # bull/bear slope clamps\n            [-1,1,0.5], # bull/bear slope clamps\n            [-1,1,0.5], # bull/bear slope clamps\n            [1,5,1],\n            [1,5,1],\n            [0,5,1],\n        ]\n\n\n\n    def indicators(self, data):\n        \"\"\"\n        Compute and return indicators used for strategy\n        \"\"\"\n        ret = {}\n        for i in range(5):\n            i += 1\n            func = [\n                qx.tu.dema,\n                qx.tu.ema,\n                qx.tu.hma,\n                qx.tu.kama,\n                qx.tu.linreg,\n                qx.tu.sma,\n                qx.tu.tema,\n                qx.tu.trima,\n                qx.tu.tsf,\n                qx.tu.vwma,\n                qx.tu.wma,\n                qx.tu.zlema,\n            ][self.tune[f\"ma{i}_type\"]]\n            if self.tune[f\"ma{i}_type\"] == 9:\n                ret[f\"ma{i}_slope\"] = qx.derivative(qx.float_period(\n                    func, (data[\"close\"], data[\"volume\"], self.tune[f\"ma{i}_period\"]), (2,)\n                ))\n                ret[f\"ma{i}_slope\"], data_close = qx.truncate(ret[f\"ma{i}_slope\"], data[\"close\"])\n                ret[f\"ma{i}_slope\"] = ret[f\"ma{i}_slope\"] / data_close * 10\n            else:\n                ret[f\"ma{i}_slope\"] = qx.derivative(qx.float_period(func, (data[\"close\"], self.tune[f\"ma{i}_period\"]), (1,)))\n                ret[f\"ma{i}_slope\"], data_close = qx.truncate(ret[f\"ma{i}_slope\"], data[\"close\"])\n                ret[f\"ma{i}_slope\"] = ret[f\"ma{i}_slope\"] / data_close * 10\n        return ret\n\n    def plot(self, *args):\n        \"\"\"\n        Plot the strategy with moving averages\n        \"\"\"\n        qx.plot(\n            *args,\n            tuple((f\"ma{i}_slope\", \"Moving Average\", (i/6, i/6, 1, 1), 1, \"Slopes\") for i in range(1, 6)),\n        )\n\n    def strategy(self, state, indicators):\n        \"\"\"\n        Strategy logic for buy/sell signals based on MA crossover and ATR\n        \"\"\"\n        ma1s = indicators[\"ma1_slope\"]\n        ma2s = indicators[\"ma2_slope\"]\n        ma3s = indicators[\"ma3_slope\"]\n        ma4s = indicators[\"ma4_slope\"]\n        ma5s = indicators[\"ma5_slope\"]\n\n        # Ensure the bot waits for a previous trade before making a decision\n        if state[\"last_trade\"] is None:\n            return qx.Buy()\n\n\n        bullish = 0\n\n        if ma1s > self.tune[\"bull1\"]:\n            bullish += 1\n        if ma2s > self.tune[\"bull2\"]:\n            bullish += 1\n        if ma3s > self.tune[\"bull3\"]:\n            bullish += 1\n        if ma4s > self.tune[\"bull4\"]:\n            bullish += 1\n        if ma5s > self.tune[\"bull5\"]:\n            bullish += 1\n\n        bearish = 0\n        if ma1s < -self.tune[\"bear1\"]:\n            bearish += 1\n        if ma2s < -self.tune[\"bear2\"]:\n            bearish += 1\n        if ma3s < -self.tune[\"bear3\"]:\n            bearish += 1\n        if ma4s < -self.tune[\"bear4\"]:\n            bearish += 1\n        if ma5s < -self.tune[\"bear5\"]:\n            bearish += 1\n\n        if abs(bullish-bearish) < self.tune[\"thresh\"]:\n            return None\n\n        # Generate Buy and Sell signals based on trend and ATR\n        if bullish >= self.tune[\"bullish\"] and isinstance(state[\"last_trade\"], qx.Sell):\n            return qx.Buy()\n\n        if bearish >= self.tune[\"bearish\"] and isinstance(state[\"last_trade\"], qx.Buy):\n            return qx.Sell()\n\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi\",\n            \"sortino_ratio\",\n            # \"trade_win_rate\",\n        ], {}\n\n\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2020-01-01\",\n        # end=\"2023-01-01\",\n    )\n    bot = MASabres()\n    try:\n        bot.tune = qx.load_tune(bot, \"BEST ROI TUNE\")\n    except:\n        print(\"Failed to load tune\")\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 20:22:32 2025": {
+  "tune": {
+   "ma1_period": 10.403957083702952,
+   "ma2_period": 19.32537395458882,
+   "ma3_period": 29.060421905484368,
+   "ma4_period": 37.03169870980227,
+   "ma5_period": 52.04054068103137,
+   "ma1_type": 0,
+   "ma2_type": 5,
+   "ma3_type": 5,
+   "ma4_type": 8,
+   "ma5_type": 6,
+   "bear1": 0.09449196006323896,
+   "bear2": 0.09909630262266737,
+   "bear3": 0.08751404214981537,
+   "bear4": 0.09885195710001729,
+   "bear5": 0.10363936250846595,
+   "bull1": 0.10011552456619818,
+   "bull2": 0.11348582553164122,
+   "bull3": 0.09255975425147334,
+   "bull4": 0.09511202413606903,
+   "bull5": 0.11710442767915291,
+   "bullish": 3.8539867635145475,
+   "bearish": 3.8982469956240537,
+   "thresh": 1.965181015443842
+  },
+  "results": {
+   "roi": 4.294611517000185,
+   "sortino_ratio": 3.2446115170001857
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 20:22:32 2025": {
+  "tune": {
+   "ma1_period": 10.403957083702952,
+   "ma2_period": 19.32537395458882,
+   "ma3_period": 29.057107009934114,
+   "ma4_period": 37.03169870980227,
+   "ma5_period": 52.04054068103137,
+   "ma1_type": 1,
+   "ma2_type": 5,
+   "ma3_type": 5,
+   "ma4_type": 8,
+   "ma5_type": 6,
+   "bear1": 0.09449196006323893,
+   "bear2": 0.09944542847792341,
+   "bear3": 0.08751404214981537,
+   "bear4": 0.09885195710001726,
+   "bear5": 0.10435586928473302,
+   "bull1": 0.10083503599101348,
+   "bull2": 0.11348582553164122,
+   "bull3": 0.09255975425147335,
+   "bull4": 0.09511202413606906,
+   "bull5": 0.11710442767915291,
+   "bullish": 3.853986763514547,
+   "bearish": 3.923391426970133,
+   "thresh": 2.0386590824281883
+  },
+  "results": {
+   "roi": 4.2946115170001855,
+   "sortino_ratio": 3.2446115170001857
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 20:25:05 2025": {
+  "tune": {
+   "ma1_period": 10.403957083702952,
+   "ma2_period": 19.32537395458882,
+   "ma3_period": 29.060421905484368,
+   "ma4_period": 37.03169870980227,
+   "ma5_period": 52.04054068103137,
+   "ma1_type": 0,
+   "ma2_type": 5,
+   "ma3_type": 5,
+   "ma4_type": 8,
+   "ma5_type": 6,
+   "bear1": 0.09449196006323896,
+   "bear2": 0.09909630262266737,
+   "bear3": 0.08751404214981537,
+   "bear4": 0.09885195710001729,
+   "bear5": 0.10363936250846595,
+   "bull1": 0.10011552456619818,
+   "bull2": 0.11348582553164122,
+   "bull3": 0.09255975425147334,
+   "bull4": 0.09511202413606903,
+   "bull5": 0.11710442767915291,
+   "bullish": 3.8539867635145475,
+   "bearish": 3.8982469956240537,
+   "thresh": 1.965181015443842
+  },
+  "results": {
+   "roi": 4.2946115170001855,
+   "sortino_ratio": 3.2446115170001857
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 20:25:05 2025": {
+  "tune": {
+   "ma1_period": 10.403957083702952,
+   "ma2_period": 19.32537395458882,
+   "ma3_period": 29.060421905484368,
+   "ma4_period": 37.03169870980227,
+   "ma5_period": 52.04054068103137,
+   "ma1_type": 0,
+   "ma2_type": 5,
+   "ma3_type": 5,
+   "ma4_type": 8,
+   "ma5_type": 6,
+   "bear1": 0.09449196006323896,
+   "bear2": 0.09909630262266737,
+   "bear3": 0.08751404214981537,
+   "bear4": 0.09885195710001729,
+   "bear5": 0.10363936250846595,
+   "bull1": 0.10011552456619818,
+   "bull2": 0.11348582553164122,
+   "bull3": 0.09255975425147334,
+   "bull4": 0.09511202413606903,
+   "bull5": 0.11710442767915291,
+   "bullish": 3.8539867635145475,
+   "bearish": 3.8982469956240537,
+   "thresh": 1.965181015443842
+  },
+  "results": {
+   "roi": 4.2946115170001855,
+   "sortino_ratio": 3.2446115170001857
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 20:26:58 2025": {
+  "tune": {
+   "ma1_period": 5.143051628156921,
+   "ma2_period": 10.22778507450074,
+   "ma3_period": 14.349509665890437,
+   "ma4_period": 20.324887097285863,
+   "ma5_period": 23.65016959247096,
+   "ma1_type": 8,
+   "ma2_type": 10,
+   "ma3_type": 7,
+   "ma4_type": 5,
+   "ma5_type": 8,
+   "bear1": 0.09835582499707754,
+   "bear2": 0.10420733298141799,
+   "bear3": 0.10167612279021965,
+   "bear4": 0.09570686028600307,
+   "bear5": 0.09904579598038007,
+   "bull1": 0.10671358339093284,
+   "bull2": 0.10231915732997114,
+   "bull3": 0.1010286572167317,
+   "bull4": 0.10057544381149622,
+   "bull5": 0.10614544837329551,
+   "bullish": 4.275539889799479,
+   "bearish": 3.704416748206841,
+   "thresh": 2.0287354134150695
+  },
+  "results": {
+   "roi": 3.230286606870706,
+   "sortino_ratio": 0
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 20:26:58 2025": {
+  "tune": {
+   "ma1_period": 5.0,
+   "ma2_period": 10.0,
+   "ma3_period": 15.0,
+   "ma4_period": 20.0,
+   "ma5_period": 25.0,
+   "ma1_type": 11,
+   "ma2_type": 11,
+   "ma3_type": 11,
+   "ma4_type": 11,
+   "ma5_type": 11,
+   "bear1": 0.1,
+   "bear2": 0.1,
+   "bear3": 0.1,
+   "bear4": 0.1,
+   "bear5": 0.1,
+   "bull1": 0.1,
+   "bull2": 0.1,
+   "bull3": 0.1,
+   "bull4": 0.1,
+   "bull5": 0.1,
+   "bullish": 4.0,
+   "bearish": 4.0,
+   "thresh": 2.0
+  },
+  "results": {
+   "roi": 1.2242704390651984,
+   "sortino_ratio": 0
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 22:38:29 2025": {
+  "tune": {
+   "ma1_period": 50.747461216068366,
+   "ma2_period": 16.55407094181937,
+   "ma3_period": 5.057650017364968,
+   "ma4_period": 57.766856233015694,
+   "ma5_period": 65.87388412143594,
+   "ma1_type": 8,
+   "ma2_type": 2,
+   "ma3_type": 7,
+   "ma4_type": 7,
+   "ma5_type": 0,
+   "bear1": -0.010457791609070413,
+   "bear2": 0.25966187601443524,
+   "bear3": 0.13772627291011685,
+   "bear4": 0.04251833747281011,
+   "bear5": 0.03437112402536293,
+   "bull1": 0.025698772355288432,
+   "bull2": 0.03985236653487323,
+   "bull3": 0.008825613888836245,
+   "bull4": 0.3515995815754559,
+   "bull5": 0.4813706517910305,
+   "bullish": 3.399567839387053,
+   "bearish": 3.7525998314727502,
+   "thresh": 0.9126845516957621
+  },
+  "results": {
+   "roi": 2.310310152807305,
+   "sortino_ratio": 1.3234668003387045
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 22:38:29 2025": {
+  "tune": {
+   "ma1_period": 50.747461216068366,
+   "ma2_period": 16.55407094181937,
+   "ma3_period": 5.057650017364968,
+   "ma4_period": 57.766856233015694,
+   "ma5_period": 65.87388412143594,
+   "ma1_type": 8,
+   "ma2_type": 2,
+   "ma3_type": 7,
+   "ma4_type": 7,
+   "ma5_type": 0,
+   "bear1": -0.010457791609070413,
+   "bear2": 0.25966187601443524,
+   "bear3": 0.13772627291011685,
+   "bear4": 0.04251833747281011,
+   "bear5": 0.03437112402536293,
+   "bull1": 0.025698772355288432,
+   "bull2": 0.03985236653487323,
+   "bull3": 0.008825613888836245,
+   "bull4": 0.3515995815754559,
+   "bull5": 0.4813706517910305,
+   "bullish": 3.399567839387053,
+   "bearish": 3.7525998314727502,
+   "thresh": 0.9126845516957621
+  },
+  "results": {
+   "roi": 2.3120209572097545,
+   "sortino_ratio": 1.2185645856222374
+  }
+ }
+}

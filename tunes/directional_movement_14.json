@@ -1,0 +1,66 @@
+{
+ "source": "\"\"\"\n\u2554\u2550\u2557\u2554\u2566\u2557\u2566\u2550\u2557\u2554\u2550\u2557\u2554\u2566\u2557\u2554\u2550\u2557\u2550\u2557 \u2566\n\u2551\u2550\u256c\u2557\u2551 \u2560\u2566\u255d\u2560\u2550\u2563 \u2551\u2551\u2551\u2563 \u2554\u2569\u2566\u255d\n\u255a\u2550\u255d\u255a\u2569 \u2569\u255a\u2550\u2569 \u2569\u2550\u2569\u255d\u255a\u2550\u255d\u2569 \u255a\u2550\n\ndirectional_movement.py\n\nIndicators:\n\n- Exponential Moving Averages (EMA):\n    - Short-term EMA (default period: 10)\n    - Mid-term EMA (default period: 20)\n    - Long-term EMA (default period: 90)\n- Directional Movement Indicators (DMI):\n    - Positive Directional Movement (DM+)\n    - Negative Directional Movement (DM-)\n- Average Directional Index (ADX) and Average Directional Index Rating (ADXR):\n    - ADX (default period: 14)\n    - ADXR (default period: 14)\n\nStrategy:\n\n1. Moving Average Crossovers: \n   - qx.Buy when the short-term EMA crosses above the long-term EMA.\n   - qx.Sell when the short-term EMA crosses below the long-term EMA.\n2. Directional Movement:\n   - Utilize DM+ and DM- to assess market strength and direction.\n   - qx.Buy signals are generated when DM+ is significantly greater than DM-.\n   - qx.Sell signals are generated when DM- is significantly greater than DM+.\n3. Sideways Market Detection:\n   - The bot identifies sideways markets using the slope of the long-term EMA.\n   - It employs clustering logic to determine when to enter or exit trades during sideways conditions.\n\"\"\"\n\n\nimport math\nimport time\n\nimport numpy as np\nimport qtradex as qx\n\n\nclass DirectionalMovement(qx.BaseBot):\n    def __init__(self):\n        # Initialize tune parameters (can be further customized)\n        self.tune = {\n            \"short_period\": 10.0,  # Short moving average\n            \"mid_period\": 20.0,  # Mid moving average\n            \"long_period\": 90.0,  # Long moving average\n            \"dm_period\": 14.0,\n            \"adx_period\": 14.0,\n            \"adxr_period\": 14.0,\n            \"cluster_thresh\": 0.05,\n            \"sideways_up\": 0.01,\n            \"sideways_down\": 0.01,\n            \"minus_dm_thresh\": 50.0,\n            \"minus_plus_dm_thresh\": 20.0,\n            \"plus_dm_ratio\": 1.2,\n        }\n        self.tune = {\n            \"short_period\": 11.592640026040238,\n            \"mid_period\": 21.58509273978805,\n            \"long_period\": 12.987307578622156,\n            \"dm_period\": 40.13268029378086,\n            \"adx_period\": 10.436935163548062,\n            \"adxr_period\": 11.954841773583773,\n            \"cluster_thresh\": 0.10722428771472528,\n            \"sideways_up\": 0.015042995797401927,\n            \"sideways_down\": 0.03924366495290047,\n            \"minus_dm_thresh\": 100.7504494785171,\n            \"minus_plus_dm_thresh\": 67.14110610491225,\n            \"plus_dm_ratio\": 1.1663845194059757,\n        }\n        self.tune = {\n            \"short_period\": 9,               # Short moving average period\n            \"mid_period\": 21,                # Mid moving average period\n            \"long_period\": 50,               # Long moving average period\n            \"dm_period\": 14,                 # Period for calculating DM+ and DM-\n            \"adx_period\": 14,                # Period for calculating ADX\n            \"adxr_period\": 11.954841773583773,\n            \"adx_threshold\": 20,             # Threshold for ADX to confirm a trend\n            \"adx_sideways_threshold\": 20,    # Threshold for ADX to identify a sideways market\n            \"minus_dm_thresh\": 10,           # Threshold for DM- to consider a sell signal\n            \"plus_dm_ratio\": 1.5,            # Ratio to compare DM- to DM+ for sell signal\n            \"cluster_thresh\": 0.02,          # Threshold for clustering condition (percentage)\n            \"sideways_up\": 0.01,             # Upper slope threshold for identifying upward sideways market\n            \"sideways_down\": -0.01,          # Lower slope threshold for identifying downward sideways market\n            \"minus_plus_dm_thresh\": 25,      # Combined threshold for DM+ and DM- to consider a buy/sell signal\n        }\n\n        self.clamps = [\n            [5, 50, 0.5],\n            [5, 50, 0.5],\n            [5, 50, 0.5],\n            [5, 50, 1],\n            [5, 50, 1],\n            [5, 50, 1],\n            [0.0001, 1, 1],\n            [0.0001, 1, 1],\n            [0.0001, 1, 1],\n            [1, 100, 0.5],\n            [1, 100, 0.5],\n            [0.1, 5, 1],\n        ]\n\n\n    def indicators(self, data):\n        \"\"\"\n        Compute and return the necessary indicators\n        \"\"\"\n        ma_short = qx.float_period(\n            qx.tu.ema, (data[\"close\"], self.tune[\"short_period\"]), (1,)\n        )\n        ma_mid = qx.float_period(qx.tu.ema, (data[\"close\"], self.tune[\"mid_period\"]), (1,))\n        ma_long_ptick = qx.float_period(\n            qx.tu.ema, (data[\"close\"], self.tune[\"long_period\"]), (1,)\n        )\n        ma_long = ma_long_ptick[:-1]\n\n        # Directional Movement Indicators (DM+ and DM-)\n        plus_dm, minus_dm = qx.tu.dm(data[\"high\"], data[\"low\"], self.tune[\"dm_period\"])\n\n        # ADX and ADXR\n        adx = qx.tu.adx(data[\"high\"], data[\"low\"], data[\"close\"], self.tune[\"adx_period\"])\n        adxr = qx.tu.adxr(\n            data[\"high\"], data[\"low\"], data[\"close\"], self.tune[\"adxr_period\"]\n        )\n\n        return {\n            \"ma_short\": ma_short,\n            \"ma_mid\": ma_mid,\n            \"ma_long\": ma_long,\n            \"ma_long_ptick\": ma_long_ptick,\n            \"plus_dm\": plus_dm,\n            \"minus_dm\": minus_dm,\n            \"adx\": adx,\n            \"adxr\": adxr,\n        }\n\n    # def strategy(self, state, indicators):\n    #     \"\"\"\n    #     Strategy logic for buy/sell signals based on MA crossovers and DMI/ADX\n    #     \"\"\"\n    #     ma_short = indicators[\"ma_short\"]\n    #     ma_mid = indicators[\"ma_mid\"]\n    #     ma_long = indicators[\"ma_long\"]\n    #     ma_long_ptick = indicators[\"ma_long_ptick\"]\n    #     plus_dm = indicators[\"plus_dm\"]\n    #     minus_dm = indicators[\"minus_dm\"]\n    #     adx = indicators[\"adx\"]\n    #     adxr = indicators[\"adxr\"]\n\n    #     if state[\"last_trade\"] is None:\n    #         return qx.Buy()\n\n    #     ma_90_slope = (ma_long - ma_long_ptick) / ma_long_ptick\n\n    #     # Condition for sideways market\n    #     sideways = 0\n    #     if (ma_90_slope > 0) and (ma_90_slope < self.tune[\"sideways_up\"]):\n    #         sideways = 1\n    #     elif (ma_90_slope < 0) and (ma_90_slope > -self.tune[\"sideways_down\"]):\n    #         sideways = -1\n\n    #     # Cluster logic\n    #     cluster = 0\n    #     if (abs(ma_short - ma_long) / ma_long) < self.tune[\"cluster_thresh\"]:\n    #         cluster = 1\n\n    #     buy_last = isinstance(state[\"last_trade\"], qx.Buy)\n    #     # Sideways market and clustering condition\n    #     if sideways == 1 and cluster == 1:\n    #         if not buy_last:\n    #             return qx.Buy()\n    #     elif sideways == -1 and cluster == 1:\n    #         if buy_last:\n    #             return qx.Sell()\n\n    #     # Moving average crossover conditions\n    #     if ma_short > ma_long:\n    #         if ma_short < ma_mid:\n    #             if buy_last:\n    #                 return qx.Sell()\n    #         elif minus_dm > self.tune[\"minus_dm_thresh\"]:\n    #             if buy_last:\n    #                 return qx.Sell()\n    #         else:\n    #             if not buy_last:\n    #                 return qx.Buy()\n\n    #     else:\n    #         if plus_dm + minus_dm > self.tune[\"minus_plus_dm_thresh\"]:\n    #             if plus_dm < minus_dm:\n    #                 if not buy_last:\n    #                     return qx.Buy()\n    #             elif minus_dm > self.tune[\"plus_dm_ratio\"] * plus_dm:\n    #                 if buy_last:\n    #                     return qx.Sell()\n\n    #     return None\n\n    def strategy(self, state, indicators):\n        ma_short = indicators[\"ma_short\"]\n        ma_mid = indicators[\"ma_mid\"]\n        ma_long = indicators[\"ma_long\"]\n        plus_dm = indicators[\"plus_dm\"]\n        minus_dm = indicators[\"minus_dm\"]\n        adx = indicators[\"adx\"]\n\n        if state[\"last_trade\"] is None:\n            return qx.Buy()  # Initial buy\n\n        buy_last = isinstance(state[\"last_trade\"], qx.Buy)\n\n        # Check for moving average crossovers\n        if ma_short > ma_long and ma_mid < ma_long:\n            if plus_dm > minus_dm and adx > self.tune[\"adx_threshold\"]:\n                if not buy_last:\n                    return qx.Buy()\n        elif ma_short < ma_long and ma_mid > ma_long:\n            if minus_dm > plus_dm and adx > self.tune[\"adx_threshold\"]:\n                if buy_last:\n                    return qx.Sell()\n\n        # Sideways market logic\n        if adx < self.tune[\"adx_sideways_threshold\"]:\n            # Implement logic for sideways market\n            return None  # No action in sideways market\n\n        return None  # Default to no action\n\n    def plot(self, *args):\n        \"\"\"\n        Plot the strategy with moving averages and DM indicators\n        \"\"\"\n        qx.plot(\n            *args,\n            (\n                (\"ma_short\", \"Short MA\", \"white\", 0, \"Main\"),\n                (\"ma_mid\", \"Mid MA\", \"cyan\", 0, \"Main\"),\n                (\"ma_long\", \"Long MA\", \"yellow\", 0, \"Main\"),\n                (\"plus_dm\", \"Plus DM\", \"green\", 1, \"Secondary\"),\n                (\"minus_dm\", \"Minus DM\", \"red\", 1, \"Secondary\"),\n                (\"adx\", \"ADX\", \"blue\", 2, \"Tertiary\"),\n                (\"adxr\", \"ADXR\", \"purple\", 2, \"Tertiary\"),\n            ),\n        )\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_gross\",\n            \"sortino_ratio\",\n            \"trade_win_rate\",\n        ], {}\n\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2023-01-01\",\n    )\n    bot = DirectionalMovement()\n\n    try:\n        bot.tune = qx.load_tune(bot, \"BEST ROI TUNE\")\n    except:\n        pass\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Wed Mar 26 21:21:13 2025": {
+  "tune": {
+   "short_period": 11.082740963374754,
+   "mid_period": 24.232575503691283,
+   "long_period": 47.64417920984749,
+   "dm_period": 14.280915091653007,
+   "adx_period": 15.115897123061622,
+   "adxr_period": 11.700768189964354,
+   "adx_threshold": 1,
+   "adx_sideways_threshold": 0,
+   "minus_dm_thresh": 1,
+   "plus_dm_ratio": 1.4542168240567248,
+   "cluster_thresh": 1.0292574434671535,
+   "sideways_up": 0.11107699893184615
+  },
+  "results": {
+   "roi": 1.1328122485069705,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.4
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Wed Mar 26 21:21:13 2025": {
+  "tune": {
+   "short_period": 9.0,
+   "mid_period": 21.0,
+   "long_period": 50.0,
+   "dm_period": 14.0,
+   "adx_period": 14.0,
+   "adxr_period": 11.954841773583773,
+   "adx_threshold": 1,
+   "adx_sideways_threshold": 1,
+   "minus_dm_thresh": 1,
+   "plus_dm_ratio": 1.5,
+   "cluster_thresh": 0.51,
+   "sideways_up": 0.1
+  },
+  "results": {
+   "roi": 1.0967588799015706,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.4
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:21:13 2025": {
+  "tune": {
+   "short_period": 9.0,
+   "mid_period": 21.0,
+   "long_period": 50.0,
+   "dm_period": 14.0,
+   "adx_period": 14.0,
+   "adxr_period": 11.954841773583773,
+   "adx_threshold": 1,
+   "adx_sideways_threshold": 1,
+   "minus_dm_thresh": 1,
+   "plus_dm_ratio": 1.5,
+   "cluster_thresh": 0.51,
+   "sideways_up": 0.1
+  },
+  "results": {
+   "roi": 1.0967588799015706,
+   "sortino_ratio": 0,
+   "trade_win_rate": 0.4
+  }
+ }
+}

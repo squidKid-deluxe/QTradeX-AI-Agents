@@ -1,0 +1,117 @@
+{
+ "source": "\"\"\"\nRenko Trading Bot with All-In, All-Out Strategy\n\nThis script defines a Renko trading bot for use on the qTradex platform. \nThe strategy is based on Renko bar crossovers and the Relative Strength Index (RSI) to generate buy and sell signals. \n\n### Strategy Overview:\n- **Renko Bars**:\n  - The bot uses Renko bars, which are price-based charts where each new bar represents a fixed price movement, \n  eliminating minor price fluctuations and providing a clearer view of the overall trend.\n  - The bot calculates the Renko bar size using either an Average True Range (ATR) method or a traditional multiplier.\n\n- **RSI Confirmation**:\n  - The strategy incorporates the Relative Strength Index (RSI) to confirm trends:\n    \n    - A **long (buy)** signal is generated when the Renko close is above the Renko open, \n    indicating an uptrend, and the RSI is below the oversold level.\n\n    - A **short (sell)** signal is generated when the Renko close is below the Renko open, \n    indicating a downtrend, and the RSI is above the overbought level.\n\n- **Warning Zones**:\n  - The bot computes warning zones around the Renko close price as a percentage of Renko movement. \n  These zones are used to determine when to exit positions:\n    - Long positions are exited if the current price drops below the warning zone low.\n    - Short positions are exited if the current price rises above the warning zone high.\n\n\n### Parameters:\n- **ATR Period** (`atr_period`): Period for calculating the Average True Range, used if the ATR method is selected for Renko calculation.\n- **Use ATR for Renko Calculation** (`is_atr`): Boolean flag to determine whether to use ATR for Renko size calculation or use the traditional multiplier method.\n- **Traditional Renko Multiplier** (`trad_len`): Multiplier for traditional Renko calculation when `is_atr` is set to 0.\n- **Warning Zone Percentage** (`warning_zone`): Percentage of Renko movement to define the warning zones for exits.\n- **RSI Period** (`rsi_period`): Period used for calculating the Relative Strength Index.\n- **RSI Oversold Threshold** (`rsi_oversold`): RSI level below which the market is considered oversold (used for long signal confirmation).\n- **RSI Overbought Threshold** (`rsi_overbought`): RSI level above which the market is considered overbought (used for short signal confirmation).\n\"\"\"\n\n\nimport math\n\nimport numpy as np\nimport qtradex as qx\n\n\nclass Renko(qx.BaseBot):\n    def __init__(self):\n        # Strategy Parameters\n        self.tune = {\n            \"atr_period\": 14.0,  # ATR period\n            \"is_atr\": 0,  # Bool: Use ATR for Renko calculation\n            \"trad_len\": 1.15,  # Traditional Renko multiplier\n            \"warning_zone\": 50.0,  # Warning zone as a percentage of Renko\n            \"rsi_period\": 14.0,  # RSI period\n            \"rsi_oversold\": 30.0,  # RSI oversold threshold\n            \"rsi_overbought\": 70.0,  # RSI overbought threshold\n        }\n\n        self.clamps = [\n            [5, 50, 0.5],  # ATR period clamp\n            [0, 1, 1],  # is_atr clamp\n            [0.1, 2.5, 0.5],  # Trad_len clamp\n            [10, 90, 0.5],  # Warning zone clamp\n            [5, 30, 1],  # RSI period clamp\n            [0, 100, 1],  # RSI oversold clamp\n            [0, 100, 1],  # RSI overbought clamp\n        ]\n\n    def calculate_renko(self, data, is_atr, atr_period, trad_len):\n        \"\"\"Calculate Renko bars based on ATR or Traditional method.\"\"\"\n        if is_atr:\n            # ATR-based Renko calculation\n            atr = qx.float_period(\n                qx.tu.atr, (data[\"high\"], data[\"low\"], data[\"close\"], atr_period), (3,)\n            )\n            renko_size = atr[-1] if len(atr) > 0 else 1\n        else:\n            # Traditional Renko calculation using the multiplier\n            renko_size = trad_len\n\n        renko_open = np.roll(data[\"close\"], 1)  # Previous close as open\n        renko_close = data[\"close\"]\n        renko_diff = abs(renko_close - renko_open)\n\n        return renko_open, renko_close, renko_diff, renko_size\n\n    def compute_rsi(self, data, rsi_period):\n        \"\"\"Calculate RSI (Relative Strength Index)\"\"\"\n        return qx.float_period(qx.tu.rsi, (data[\"close\"], rsi_period), (1,))\n\n    def indicators(self, data):\n        \"\"\"Compute Renko bars and RSI, as well as warning zones.\"\"\"\n        # Get Renko bars based on chosen parameters\n        renko_open, renko_close, renko_diff, renko_size = self.calculate_renko(\n            data, self.tune[\"is_atr\"], self.tune[\"atr_period\"], self.tune[\"trad_len\"]\n        )\n\n        # Calculate RSI\n        rsi = self.compute_rsi(data, self.tune[\"rsi_period\"])\n\n        # Warning zones for Renko\n        warning_zone_high = renko_close + renko_diff * (self.tune[\"warning_zone\"] / 100)\n        warning_zone_low = renko_close - renko_diff * (self.tune[\"warning_zone\"] / 100)\n\n        return {\n            \"renko_open\": renko_open,\n            \"renko_close\": renko_close,\n            \"renko_diff\": renko_diff,\n            \"warning_zone_high\": warning_zone_high,\n            \"warning_zone_low\": warning_zone_low,\n            \"rsi\": rsi,\n        }\n\n    def strategy(self, tick_info, indicators):\n        \"\"\"Define the trading strategy using Renko crossover signals.\n\n        The strategy generates all-in, all-out buy/sell signals based purely on the Renko bar crossover\n        and RSI momentum. The logic is as follows:\n\n        - **Long (Buy) Entry**: Triggered when Renko close is greater than Renko open (uptrend) and RSI is below the oversold level.\n        - **Short (Sell) Entry**: Triggered when Renko close is less than Renko open (downtrend) and RSI is above the overbought level.\n        - **Exit Conditions**:\n          - Long positions are closed if the current price drops below the warning zone low.\n          - Short positions are closed if the current price rises above the warning zone high.\n\n        Args:\n            tick_info (dict): Contains the current price data, including 'close' price.\n            indicators (dict): Contains the computed indicators, such as 'renko_open', 'renko_close', 'rsi', etc.\n\n        Returns:\n            qx.Buy or qx.Sell: The corresponding trading signal (buy or sell) based on the conditions.\n        \"\"\"\n\n        renko_open = indicators[\"renko_open\"]\n        renko_close = indicators[\"renko_close\"]\n        renko_diff = indicators[\"renko_diff\"]\n        warning_zone_high = indicators[\"warning_zone_high\"]\n        warning_zone_low = indicators[\"warning_zone_low\"]\n        rsi = indicators[\"rsi\"]\n\n        # Long entry condition (Renko close crosses above Renko open + RSI confirmation)\n        long_condition = renko_close > renko_open and rsi < self.tune[\"rsi_oversold\"]\n\n        # Short entry condition (Renko close crosses below Renko open + RSI confirmation)\n        short_condition = renko_close < renko_open and rsi > self.tune[\"rsi_overbought\"]\n\n        # Long exit condition (price drops below the warning zone low)\n        long_exit_condition = tick_info[\"close\"] < warning_zone_low\n\n        # Short exit condition (price rises above the warning zone high)\n        short_exit_condition = tick_info[\"close\"] > warning_zone_high\n\n        # All-in, all-out approach: Close the current position and enter a new one.\n        if long_condition:\n            return qx.Buy()  # Open Long position\n\n        elif short_condition:\n            return qx.Sell()  # Open Short position\n\n        # Exit conditions: If current price hits the warning zone for the respective position, close the position.\n        elif long_exit_condition:\n            return qx.Sell()  # Close Long position\n\n        elif short_exit_condition:\n            return qx.Buy()  # Close Short position\n\n        return None  # No action if no conditions are met\n\n    def plot(self, *args):\n        \"\"\"Plot Renko bars, warning zones, and entry/exit arrows.\"\"\"\n        renko_open = args[0][\"renko_open\"]\n        renko_close = args[0][\"renko_close\"]\n        warning_zone_high = args[0][\"warning_zone_high\"]\n        warning_zone_low = args[0][\"warning_zone_low\"]\n\n        qx.plot(\n            *args,\n            (\n                (\"renko_close\", \"Renko Close\", \"green\", 0, \"Main\"),\n                (\"renko_open\", \"Renko Open\", \"red\", 0, \"Main\"),\n                (\"warning_zone_high\", \"Warning Zone High\", \"yellow\", 1, \"Main\"),\n                (\"warning_zone_low\", \"Warning Zone Low\", \"yellow\", 1, \"Main\"),\n            ),\n        )\n\n        # Plot arrows for buy/sell signals\n        long_arrow = 1 if renko_close[-1] > renko_open[-1] else None\n        short_arrow = -1 if renko_close[-1] < renko_open[-1] else None\n        qx.plot_arrow(long_arrow, colorup=\"aqua\", transp=0)\n        qx.plot_arrow(short_arrow, colordown=\"red\", transp=0)\n\n        # Plot warning zone arrows\n        if tick_info[\"close\"] < warning_zone_low:\n            qx.plot_arrow(1, colordown=\"red\", transp=60)\n        elif tick_info[\"close\"] > warning_zone_high:\n            qx.plot_arrow(-1, colorup=\"aqua\", transp=60)\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_assets\",\n            \"roi_currency\",\n            \"roi\",\n            \"cagr\",\n            \"sortino\",\n            \"maximum_drawdown\",\n            \"trade_win_rate\",\n        ], {}\n\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 1, currency: 0})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2025-01-01\",\n    )\n\n    bot = Renko()\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI_ASSETS TUNE_Wed Mar 26 21:22:15 2025": {
+  "tune": {
+   "atr_period": 13.90815822715116,
+   "is_atr": 1,
+   "trad_len": 1.2077184589416523,
+   "warning_zone": 48.704341917613775,
+   "rsi_period": 13.427240335467932,
+   "rsi_oversold": 31.17669670331035,
+   "rsi_overbought": 64.9338022054053
+  },
+  "results": {
+   "roi_assets": 1.8837027929032875,
+   "roi_currency": 0.9634090799119522,
+   "roi": 1.3471363607810944,
+   "cagr": 0.08084535089877454,
+   "maximum_drawdown": -0.5562030502051177,
+   "trade_win_rate": 0.8
+  }
+ },
+ "BEST ROI_CURRENCY TUNE_Wed Mar 26 21:22:15 2025": {
+  "tune": {
+   "atr_period": 13.223024412106788,
+   "is_atr": 0,
+   "trad_len": 1.0549879215661138,
+   "warning_zone": 51.13184758677278,
+   "rsi_period": 13.740792727525143,
+   "rsi_oversold": 31.043884134362894,
+   "rsi_overbought": 64.81688084416805
+  },
+  "results": {
+   "roi_assets": 1.8837027929032875,
+   "roi_currency": 0.9634090799119521,
+   "roi": 1.3471363607810944,
+   "cagr": 0.08084535089877454,
+   "maximum_drawdown": -0.5562030502051177,
+   "trade_win_rate": 0.8
+  }
+ },
+ "BEST ROI TUNE_Wed Mar 26 21:22:15 2025": {
+  "tune": {
+   "atr_period": 13.223024412106788,
+   "is_atr": 0,
+   "trad_len": 1.0549879215661138,
+   "warning_zone": 51.13184758677278,
+   "rsi_period": 13.740792727525143,
+   "rsi_oversold": 31.043884134362894,
+   "rsi_overbought": 64.81688084416805
+  },
+  "results": {
+   "roi_assets": 1.8837027929032875,
+   "roi_currency": 0.9634090799119522,
+   "roi": 1.3471363607810942,
+   "cagr": 0.08084535089877454,
+   "maximum_drawdown": -0.5562030502051177,
+   "trade_win_rate": 0.8
+  }
+ },
+ "BEST CAGR TUNE_Wed Mar 26 21:22:15 2025": {
+  "tune": {
+   "atr_period": 13.90815822715116,
+   "is_atr": 1,
+   "trad_len": 1.2077184589416523,
+   "warning_zone": 48.704341917613775,
+   "rsi_period": 13.427240335467932,
+   "rsi_oversold": 31.17669670331035,
+   "rsi_overbought": 64.9338022054053
+  },
+  "results": {
+   "roi_assets": 1.8837027929032875,
+   "roi_currency": 0.9634090799119522,
+   "roi": 1.3471363607810944,
+   "cagr": 0.08084535089877454,
+   "maximum_drawdown": -0.5562030502051177,
+   "trade_win_rate": 0.8
+  }
+ },
+ "BEST MAXIMUM_DRAWDOWN TUNE_Wed Mar 26 21:22:15 2025": {
+  "tune": {
+   "atr_period": 13.223024412106788,
+   "is_atr": 0,
+   "trad_len": 1.0549879215661138,
+   "warning_zone": 51.13184758677278,
+   "rsi_period": 13.740792727525143,
+   "rsi_oversold": 32.14002162216727,
+   "rsi_overbought": 64.81688084416805
+  },
+  "results": {
+   "roi_assets": 1.4687537299211957,
+   "roi_currency": 0.7511857416634812,
+   "roi": 1.0503841487436192,
+   "cagr": 0.012907410508722794,
+   "maximum_drawdown": -0.43566565923221656,
+   "trade_win_rate": 0.7
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Wed Mar 26 21:22:15 2025": {
+  "tune": {
+   "atr_period": 13.913910220565072,
+   "is_atr": 1,
+   "trad_len": 1.2077184589416523,
+   "warning_zone": 48.704341917613775,
+   "rsi_period": 13.427240335467932,
+   "rsi_oversold": 31.17669670331035,
+   "rsi_overbought": 64.9338022054053
+  },
+  "results": {
+   "roi_assets": 1.8837027929032875,
+   "roi_currency": 0.9634090799119522,
+   "roi": 1.3471363607810944,
+   "cagr": 0.08084535089877454,
+   "maximum_drawdown": -0.5562030502051177,
+   "trade_win_rate": 0.8
+  }
+ }
+}
