@@ -50,24 +50,20 @@ class BlackHoleStrategy(qx.BaseBot):
             "volatility_surge_factor": 2.5,
         }
 
-        self.clamps = [
-            [5, 200, 0.5],
-            [5, 50, 0.5],
-            [0.05, 1.0, 0.5],
-            [0.05, 1.0, 0.5],
-            [1.0, 5.0, 0.5],
-        ]
+        # fmt: off
+        self.clamps = {
+            "sma_period":              [5,    50.0, 200, 0.5],
+            "atr_period":              [5,    14.0, 50, 0.5],
+            "compression_factor":      [0.05, 0.2,  1.0, 0.5],
+            "momentum_trigger":        [0.05, 0.1,  1.0, 0.5],
+            "volatility_surge_factor": [1.0,  2.5,  5.0, 0.5],
+        }
+        # fmt: on
 
     def indicators(self, data):
         metrics = {
-            "sma": qx.float_period(
-                qx.tu.sma, (data["close"], self.tune["sma_period"]), (1,)
-            ),
-            "atr": qx.float_period(
-                qx.tu.atr,
-                (data["high"], data["low"], data["close"], self.tune["atr_period"]),
-                (3,),
-            ),
+            "sma": qx.ti.sma(data["close"], self.tune["sma_period"]),
+            "atr": qx.ti.atr(data["high"], data["low"], data["close"], self.tune["atr_period"]),
         }
 
         # Detect volatility surge

@@ -71,44 +71,37 @@ class TrimaZlemaFisher(qx.BaseBot):
         }
 
         # Optimizer clamps (min, max, strength)
-        self.clamps = [
-            [5, 50, 0.5],  # For ZLEMA Period
-            [5, 50, 0.5],  # For TRIMA Period
-            [5, 50, 0.5],  # For Fisher Transform Period
-            [1, 5, 1],  # Buy Threshold
-            [1, 5, 1],  # Sell Threshold
-            [-1, 1, 0.5],  # ZLEMA Derivative Threshold
-            [-1, 1, 0.5],  # TRIMA Derivative Threshold
-            [-1, 1, 0.5],  # Fisher Derivative Threshold
-            [0, 1, 0.5],  # ZLEMA > TRIMA Threshold (Bullish confirmation)
-            [0, 1, 0.5],  # ZLEMA < TRIMA Threshold (Bearish confirmation)
-            [0, 1, 0.5],  # ZLEMA < TRIMA Threshold (Bearish confirmation)
-        ]
+        self.clamps = {
+            "zlema_period": [5, 14.0, 50, 0.5],
+            "trima_period": [5, 14.0, 50, 0.5],
+            "fisher_period": [5, 14.0, 50, 0.5],
+            "buy_threshold": [1, 3, 5, 1],
+            "sell_threshold": [1, 3, 5, 1],
+            "zlema_d_threshold": [-1, 0.0, 1, 0.5],
+            "trima_d_threshold": [-1, 0.0, 1, 0.5],
+            "fisher_d_threshold": [-1, 0.0, 1, 0.5],
+            "zlema_trima_bear": [0, 0.0, 1, 0.5],
+            "zlema_trima_bull": [0, 0.0, 1, 0.5],
+        }
 
     def indicators(self, data):
         """
         Calculate the indicators used in the strategy.
         """
         # Zero-Lag Exponential Moving Average (ZLEMA)
-        zlema = qx.float_period(
-            qx.tu.zlema, (data["close"], self.tune["zlema_period"]), (1,)
-        )
+        zlema = qx.ti.zlema(data["close"], self.tune["zlema_period"])
 
         # Derivative of Zero-Lag Exponential Moving Average (ZLEMA)
         zlema_derivative = qx.derivative(zlema)
 
         # Triangular Moving Average (TRIMA)
-        trima = qx.float_period(
-            qx.tu.trima, (data["close"], self.tune["trima_period"]), (1,)
-        )
+        trima = qx.ti.trima(data["close"], self.tune["trima_period"])
 
         # Derivative of Triangular Moving Average (TRIMA)
         trima_derivative = qx.derivative(trima)
 
         # Fisher Transform (FT)
-        fisher, fisher_signal = qx.float_period(
-            qx.tu.fisher, (data["high"], data["low"], self.tune["fisher_period"]), (2,)
-        )
+        fisher, fisher_signal = qx.ti.fisher(data["high"], data["low"], self.tune["fisher_period"])
 
         # Derivative of Fisher Transform (FT)
         fisher_derivative = qx.derivative(fisher)

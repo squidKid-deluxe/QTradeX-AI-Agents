@@ -44,29 +44,26 @@ import qtradex as qx
 
 class Aroon(qx.BaseBot):
     def __init__(self):
-        self.tune = {"aroon_period": 15.0, "sell_thresh": 50.0, "buy_thresh": 50.0}
         self.tune = {
             "aroon_period": 18.23944232459082,
             "sell_thresh": 2.512268085738901,
             "buy_thresh": 1.150776158276998,
         }
 
-        self.clamps = [
-            # min, max, strength
-            [5, 50, 1],
-            [1, 100, 1],
-            [1, 100, 1],
-        ]
+        # fmt: off
+        self.clamps = {
+            # min, drop, max, strength
+            "aroon_period": [5, 15, 50,  1],
+            "sell_thresh":  [1, 50, 100, 1],
+            "buy_thresh":   [1, 50, 100, 1],
+        }
+        # fmt: on
 
     def indicators(self, data):
         # tulip indicators are exposed via qx.indicators.tulipy
         # and cached on backend for optimization speed
         return {
-            "aroon_osc": qx.float_period(
-                qx.tu.aroonosc,
-                (data["high"], data["low"], self.tune["aroon_period"]),
-                (2,),
-            ),
+            "aroon_osc": qx.ti.aroonosc(data["high"], data["low"], self.tune["aroon_period"]),
         }
 
     def plot(self, data, states, indicators, block):

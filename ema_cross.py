@@ -45,25 +45,14 @@ class EmaCross(qx.BaseBot):
             "ma2_period": 10.0,
         }
         # optimizer clamps (min, max, strength)
-        self.clamps = [
-            [5, 100, 1],  # For ma1
-            [10, 150, 1],  # For ma2
-        ]
+        self.clamps = {"ma1_period": [5, 5, 100, 1], "ma2_period": [10, 10.0, 150, 1]}
 
     def indicators(self, data):
         # tulip indicators are exposed via qx.indicators.tulipy
         # and cached on backend for optimization speed
         return {
-            "ma1": qx.float_period(
-                qx.tu.ema,
-                (data["close"], self.tune["ma1_period"]),
-                (1,),
-            ),
-            "ma2": qx.float_period(
-                qx.tu.ema,
-                (data["close"], self.tune["ma2_period"]),
-                (1,),
-            ),
+            "ma1": qx.ti.ema(data["close"], self.tune["ma1_period"]),
+            "ma2": qx.ti.ema(data["close"], self.tune["ma2_period"]),
         }
 
     def plot(self, *args):

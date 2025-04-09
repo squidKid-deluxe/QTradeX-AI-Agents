@@ -64,22 +64,6 @@ import qtradex as qx
 
 class Cthulhu(qx.BaseBot):
     def __init__(self):
-        # Initialize your tune parameters (similar to the original 'tune' dictionary)
-        self.drop = {
-            "ema_period": 14.0,
-            "std_period": 14.0,
-            "upper_deviations": 2.0,
-            "lower_deviations": 2.0,
-            "channel_buy_factor": 0.9,
-            "channel_sell_factor": 1.1,
-            "trend_buy_factor": 1.1,
-            "trend_sell_factor": 0.9,
-            "breakout_buy_factor": 1.05,
-            "breakout_sell_factor": 0.95,
-            "sar_accel": 0.02,
-            "sar_max": 0.2,
-            "channel": 0.01,
-        }
         self.tune = {
             "ema_period": 20.53,
             "std_period": 7.448,
@@ -96,38 +80,29 @@ class Cthulhu(qx.BaseBot):
             "channel": 0.008094,
         }
 
-        self.clamps = [
-            # periods
-            [5, 100, 0.5],
-            [5, 100, 0.5],
-            # deviations
-            [1.0, 4.0, 0.5],
-            [1.0, 4.0, 0.5],
-            # coefficients
-            [0.5, 2.0, 0.5],
-            [0.5, 2.0, 0.5],
-            [0.5, 2.0, 0.5],
-            [0.5, 2.0, 0.5],
-            [0.5, 2.0, 0.5],
-            [0.5, 2.0, 0.5],
-            # parabolic sar
-            [0.0001, 0.2, 0.5],
-            [0.0001, 0.2, 0.5],
-            # channel
-            [0.0001, 0.2, 0.5],
-        ]
+        self.clamps = {
+            "ema_period": [5, 14.0, 100, 0.5],
+            "std_period": [5, 14.0, 100, 0.5],
+            "upper_deviations": [1.0, 2.0, 4.0, 0.5],
+            "lower_deviations": [1.0, 2.0, 4.0, 0.5],
+            "channel_buy_factor": [0.5, 0.9, 2.0, 0.5],
+            "channel_sell_factor": [0.5, 1.1, 2.0, 0.5],
+            "trend_buy_factor": [0.5, 1.1, 2.0, 0.5],
+            "trend_sell_factor": [0.5, 0.9, 2.0, 0.5],
+            "breakout_buy_factor": [0.5, 1.05, 2.0, 0.5],
+            "breakout_sell_factor": [0.5, 0.95, 2.0, 0.5],
+            "sar_accel": [0.0001, 0.02, 0.2, 0.5],
+            "sar_max": [0.0001, 0.2, 0.2, 0.5],
+            "channel": [0.0001, 0.01, 0.2, 0.5],
+        }
 
     def indicators(self, data):
         metrics = {}
 
         # Example for moving average (use QX's built-in indicators like EMA or SMA)
-        metrics["ma0"] = qx.float_period(
-            qx.tu.ema, (data["close"], self.tune["ema_period"]), (1,)
-        )
+        metrics["ma0"] = qx.ti.ema(data["close"], self.tune["ema_period"])
         metrics["ma1"] = metrics["ma0"][:-1]
-        metrics["std"] = qx.float_period(
-            qx.tu.stddev, (data["close"], self.tune["std_period"]), (1,)
-        )
+        metrics["std"] = qx.ti.stddev(data["close"], self.tune["std_period"])
 
         metrics["ma0"], metrics["ma1"], metrics["std"] = qx.truncate(
             metrics["ma0"], metrics["ma1"], metrics["std"]
@@ -144,7 +119,7 @@ class Cthulhu(qx.BaseBot):
         metrics["diff"] = metrics["upper"] - metrics["lower"]
 
         # Parabolic SAR (example, adjust according to your requirements)
-        metrics["sar0"] = qx.tu.psar(
+        metrics["sar0"] = qx.ti.psar(
             data["high"], data["low"], self.tune["sar_accel"], self.tune["sar_max"]
         )
         metrics["sar1"] = metrics["sar0"][:-1]

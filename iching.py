@@ -51,7 +51,7 @@ class IChing(qx.BaseBot):
                 bin(i)[2:].rjust(6, "0")
             ] = 0  # np.random.choice([-1, 0, 1])  # Randomly assign -1, 0, or 1
 
-        self.clamps = [
+        self.clmps = [
             *[[5.0, 100.0, 0.5] for _ in range(6)],
             *[[-1, 1, 1] for _ in range(64)],
         ]
@@ -62,11 +62,7 @@ class IChing(qx.BaseBot):
     def indicators(self, data):
         ema_values = {
             f"ma{i}_slope": qx.derivative(
-                qx.float_period(
-                    qx.tu.ema,
-                    (data["close"], self.tune[f"ma{i}_period"]),
-                    (1,),
-                )
+                qx.ti.ema(data["close"], self.tune[f"ma{i}_period"])
             )
             for i in range(1, 7)
         }
@@ -135,8 +131,9 @@ def main():
         asset=asset,
         currency=currency,
         begin="2021-01-01",
-        end="2023-01-01",
+        # end="2023-01-01",
     )
+    dta = qx.public.utilities.fetch_composite_data(data, 60 * 30)
 
     bot = IChing()
     qx.dispatch(bot, data, wallet)

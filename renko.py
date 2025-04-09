@@ -68,23 +68,21 @@ class Renko(qx.BaseBot):
             "rsi_overbought": 70.0,  # RSI overbought threshold
         }
 
-        self.clamps = [
-            [5, 50, 0.5],  # ATR period clamp
-            [0, 1, 1],  # is_atr clamp
-            [0.1, 2.5, 0.5],  # Trad_len clamp
-            [10, 90, 0.5],  # Warning zone clamp
-            [5, 30, 1],  # RSI period clamp
-            [0, 100, 1],  # RSI oversold clamp
-            [0, 100, 1],  # RSI overbought clamp
-        ]
+        self.clamps = {
+            "atr_period": [5, 14.0, 50, 0.5],
+            "is_atr": [0, 0, 1, 1],
+            "trad_len": [0.1, 1.15, 2.5, 0.5],
+            "warning_zone": [10, 50.0, 90, 0.5],
+            "rsi_period": [5, 14.0, 30, 1],
+            "rsi_oversold": [0, 30.0, 100, 1],
+            "rsi_overbought": [0, 70.0, 100, 1],
+        }
 
     def calculate_renko(self, data, is_atr, atr_period, trad_len):
         """Calculate Renko bars based on ATR or Traditional method."""
         if is_atr:
             # ATR-based Renko calculation
-            atr = qx.float_period(
-                qx.tu.atr, (data["high"], data["low"], data["close"], atr_period), (3,)
-            )
+            atr = qx.ti.atr(data["high"], data["low"], data["close"], atr_period)
             renko_size = atr[-1] if len(atr) > 0 else 1
         else:
             # Traditional Renko calculation using the multiplier
@@ -98,7 +96,7 @@ class Renko(qx.BaseBot):
 
     def compute_rsi(self, data, rsi_period):
         """Calculate RSI (Relative Strength Index)"""
-        return qx.float_period(qx.tu.rsi, (data["close"], rsi_period), (1,))
+        return qx.ti.rsi(data["close"], rsi_period)
 
     def indicators(self, data):
         """Compute Renko bars and RSI, as well as warning zones."""

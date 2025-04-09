@@ -86,61 +86,53 @@ class UltimateForecastMesa(qx.BaseBot):
         }
 
         # Optimizer clamps (min, max, strength)
-        self.clamps = [
-            [5, 50, 0.5],  # UO Short Period
-            [5, 50, 0.5],  # UO Medium Period
-            [5, 50, 0.5],  # UO Long Period
-            [5, 50, 0.5],  # FO Period
-            [5, 50, 0.5],  # MSW Period
-            [1, 5, 1],  # Buy Threshold
-            [1, 5, 1],  # Sell Threshold
-            [0, 100, 0.5],  # UO Buy Threshold (oversold)
-            [0, 100, 0.5],  # UO Sell Threshold (overbought)
-            [-100, 0, 0.5],  # FO Buy Threshold (negative for divergence)
-            [0, 100, 0.5],  # FO Sell Threshold (positive for trend following)
-            [-100, 0, 0.5],  # MSW Buy Threshold
-            [0, 100, 0.5],  # MSW Sell Threshold
-            [-1, 1, 0.5],  # UO Buy Derivative Threshold
-            [-1, 1, 0.5],  # FO Buy Derivative Threshold
-            [-1, 1, 0.5],  # MSW Buy Derivative Threshold
-            [-1, 1, 0.5],  # UO Sell Derivative Threshold
-            [-1, 1, 0.5],  # FO Sell Derivative Threshold
-            [-1, 1, 0.5],  # MSW Sell Derivative Threshold
-        ]
+        self.clamps = {
+            "uo_short_period": [5, 7.0, 50, 0.5],
+            "uo_medium_period": [5, 14.0, 50, 0.5],
+            "uo_long_period": [5, 28.0, 50, 0.5],
+            "fosc_period": [5, 14.0, 50, 0.5],
+            "msw_period": [5, 10.0, 50, 0.5],
+            "buy_threshold": [1, 3, 5, 1],
+            "sell_threshold": [1, 3, 5, 1],
+            "uo_buy_threshold": [0, 30.0, 100, 0.5],
+            "uo_sell_threshold": [0, 70.0, 100, 0.5],
+            "fosc_buy_threshold": [-100, 0.0, 0, 0.5],
+            "fosc_sell_threshold": [0, 0.0, 100, 0.5],
+            "msw_buy_threshold": [-100, 0.0, 0, 0.5],
+            "msw_sell_threshold": [0, 0.0, 100, 0.5],
+            "uo_buy_d_threshold": [-1, 0.0, 1, 0.5],
+            "fosc_buy_d_threshold": [-1, 0.0, 1, 0.5],
+            "msw_buy_sine_d_threshold": [-1, 0.0, 1, 0.5],
+            "uo_sell_d_threshold": [-1, 0.0, 1, 0.5],
+            "fosc_sell_d_threshold": [-1, 0.0, 1, 0.5],
+            "msw_sine_sell_d_threshold": [-1, 0.0, 1, 0.5],
+        }
 
     def indicators(self, data):
         """
         Calculate the indicators used in the strategy.
         """
         # Ultimate Oscillator (UO)
-        uo = qx.float_period(
-            qx.tu.ultosc,
-            (
+        uo = qx.ti.ultosc(
                 data["high"],
                 data["low"],
                 data["close"],
                 self.tune["uo_short_period"],
                 self.tune["uo_medium_period"],
                 self.tune["uo_long_period"],
-            ),
-            (3, 4, 5),
-        )
+            )
 
         # Derivative of Ultimate Oscillator (UO)
         uo_derivative = qx.derivative(uo)
 
         # Forecast Oscillator (FO)
-        fosc = qx.float_period(
-            qx.tu.fosc, (data["close"], self.tune["fosc_period"]), (1,)
-        )
+        fosc = qx.ti.fosc(data["close"], self.tune["fosc_period"])
 
         # Derivative of Forecast Oscillator (FO)
         fosc_derivative = qx.derivative(fosc)
 
         # Mesa Sine Wave (MSW)
-        msw_sine, msw_lead = qx.float_period(
-            qx.tu.msw, (data["close"], self.tune["msw_period"]), (1, 1)
-        )
+        msw_sine, msw_lead = qx.ti.msw(data["close"], self.tune["msw_period"])
 
         # Derivative of Mesa Sine Wave (MSW)
         msw_sine_derivative = qx.derivative(msw_sine)

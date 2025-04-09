@@ -10,7 +10,7 @@ forty96.py
 Indicators:
 
     For each EMA, the code calculates its value and slope (rate of change in price)
-    using the qx.tu.ema and qx.derivative functions. The values and slopes are then
+    using the qx.ti.ema and qx.derivative functions. The values and slopes are then
     used to form a "hexagram" (a 12-dimensional dictionary), which represents the
     combination of conditions based on the price and EMAs.
 
@@ -59,7 +59,7 @@ class Forty96(qx.BaseBot):
 
         # self.tune = TUNE
 
-        self.clamps = [
+        self.clmps = [
             *[[5.0, 100.0, 0.5] for _ in range(3)],
             *[[-1, 1, 1] for _ in range(4096)],
         ]
@@ -69,16 +69,12 @@ class Forty96(qx.BaseBot):
 
     def indicators(self, data):
         ema_values = {
-            f"ma{i}": qx.tu.ema(data["close"], self.tune[f"ma{i}_period"])
+            f"ma{i}": qx.ti.ema(data["close"], self.tune[f"ma{i}_period"])
             for i in range(1, 4)
         }
         ema_slopes = {
             f"ma{i}_slope": qx.derivative(
-                qx.float_period(
-                    qx.tu.ema,
-                    (data["close"], self.tune[f"ma{i}_period"]),
-                    (1,),
-                )
+                qx.ti.ema(data["close"], self.tune[f"ma{i}_period"])
             )
             for i in range(1, 4)
         }

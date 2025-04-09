@@ -115,35 +115,30 @@ class ParabolicSARBot(qx.BaseBot):
             "ago": 24,
         }
 
-        self.clamps = [
-            # min, max, strength
-            # sar initial + acceleration
-            [0.001, 1.0, 0.5],
-            [0.001, 1.0, 0.5],
-            # sar scalars
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            # moving averages
-            [5, 90, 0.5],
-            [5, 90, 0.5],
-            [5, 90, 0.5],
-            [5, 90, 0.5],
-            [2, 10, 0.5],
-            # magic numbers and thresholds
-            [1, 6, 1],
-            [0.1, 20, 1],
-            [0.1, 20, 1],
-            [0.1, 20, 1],
-            [0.1, 20, 1],
-            [1, 100, 1],
-            [1, 100, 1],
-            [0, 100, 1],
-        ]
+        self.clamps = {
+            "SAR_initial": [0.001, 0.02, 1.0, 0.5],
+            "SAR_acceleration": [0.001, 0.2, 1.0, 0.5],
+            "scalar_1": [1, 2.0, 200, 1],
+            "scalar_2": [1, 4.0, 200, 1],
+            "scalar_3": [1, 8.0, 200, 1],
+            "scalar_4": [1, 10.0, 200, 1],
+            "scalar_5": [1, 12.0, 200, 1],
+            "scalar_6": [1, 14.0, 200, 1],
+            "scalar_7": [1, 16.0, 200, 1],
+            "ma1_period": [5, 5.0, 90, 0.5],
+            "ma2_period": [5, 8.0, 90, 0.5],
+            "ma3_period": [5, 12.0, 90, 0.5],
+            "ma4_period": [5, 15.0, 90, 0.5],
+            "signal_period": [2, 5.0, 10, 0.5],
+            "sar_thresh": [1, 4.0, 6, 1],
+            "signal_thresh": [0.1, 5.0, 20, 1],
+            "signal_thresh_old": [0.1, 1.0, 20, 1],
+            "signal_thresh_sell": [0.1, 0.9, 20, 1],
+            "rest_multiplier": [0.1, 1.0, 20, 1],
+            "min_rest": [1, 1.0, 100, 1],
+            "buy_rest": [1, 1.0, 100, 1],
+            "ago": [0, 3, 100, 1],
+        }
 
         # Initialize storage for trade details
         self.storage = {"hold": 0}
@@ -161,7 +156,7 @@ class ParabolicSARBot(qx.BaseBot):
         # Calculate the SAR values for different scalars using self.tune
         sars = np.array(
             [
-                qx.tu.psar(
+                qx.ti.psar(
                     data["high"],
                     data["low"],
                     self.tune["SAR_initial"] / self.tune[f"scalar_{h}"],
@@ -172,13 +167,11 @@ class ParabolicSARBot(qx.BaseBot):
         ).T
 
         # Calculate the signal (simple moving average of close prices)
-        ma1 = qx.float_period(qx.tu.ema, (data["close"], self.tune["ma1_period"]), (1,))
-        ma2 = qx.float_period(qx.tu.ema, (data["close"], self.tune["ma2_period"]), (1,))
-        ma3 = qx.float_period(qx.tu.ema, (data["close"], self.tune["ma3_period"]), (1,))
-        signal = qx.float_period(
-            qx.tu.ema, (data["close"], self.tune["signal_period"]), (1,)
-        )
-        ma4 = qx.float_period(qx.tu.ema, (data["close"], self.tune["ma4_period"]), (1,))
+        ma1 = qx.ti.ema(data["close"], self.tune["ma1_period"])
+        ma2 = qx.ti.ema(data["close"], self.tune["ma2_period"])
+        ma3 = qx.ti.ema(data["close"], self.tune["ma3_period"])
+        signal = qx.ti.ema(data["close"], self.tune["signal_period"])
+        ma4 = qx.ti.ema(data["close"], self.tune["ma4_period"])
 
         return {
             "sars": sars,

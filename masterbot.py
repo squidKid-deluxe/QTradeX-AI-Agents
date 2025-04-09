@@ -78,51 +78,39 @@ class MasterBot(qx.BaseBot):
             "sl_multiplier": 2.0,  # Stop loss multiplier (ATR)
         }
 
-        self.clamps = [
-            [5, 100, 0.5],
-            [5, 100, 0.5],
-            [5, 100, 0.5],
-            [5, 100, 0.5],
-            [5, 100, 0.5],
-            [5, 100, 0.5],
-            [5, 100, 0.5],
-            [2, 100, 0.5],
-            [2, 100, 0.5],
-            [2, 100, 0.5],
-        ]
+        self.clamps = {
+            "macd_fast_period": [5, 12.0, 100, 0.5],
+            "macd_slow_period": [5, 26.0, 100, 0.5],
+            "macd_signal_period": [5, 9.0, 100, 0.5],
+            "k_period": [5, 14.1, 100, 0.5],
+            "k_slowing": [5, 9.0, 100, 0.5],
+            "d_period": [5, 9.0, 100, 0.5],
+            "rsi_period": [5, 14.0, 100, 0.5],
+            "atr_period": [2, 14.0, 100, 0.5],
+            "tp_multiplier": [2, 6.0, 100, 0.5],
+            "sl_multiplier": [2, 2.0, 100, 0.5],
+        }
 
     def indicators(self, data):
         """
         Calculate indicators using QX's indicator library (EMA, RSI, Stochastic, ATR).
         """
-        macd_line, macd_signal, _ = qx.float_period(
-            qx.tu.macd,
-            (
+        macd_line, macd_signal, _ = qx.ti.macd(
                 data["close"],
                 self.tune["macd_fast_period"],
                 self.tune["macd_slow_period"],
                 self.tune["macd_signal_period"],
-            ),
-            (1, 2, 3),
-        )
-        stoch_k, stoch_d = qx.float_period(
-            qx.tu.stoch,
-            (
+            )
+        stoch_k, stoch_d = qx.ti.stoch(
                 data["close"],
                 data["high"],
                 data["low"],
                 self.tune["k_period"],
                 self.tune["k_slowing"],
                 self.tune["d_period"],
-            ),
-            (3, 4, 5),
-        )
-        rsi = qx.float_period(qx.tu.rsi, (data["close"], self.tune["rsi_period"]), (1,))
-        atr = qx.float_period(
-            qx.tu.atr,
-            (data["high"], data["low"], data["close"], self.tune["atr_period"]),
-            (3,),
-        )
+            )
+        rsi = qx.ti.rsi(data["close"], self.tune["rsi_period"])
+        atr = qx.ti.atr(data["high"], data["low"], data["close"], self.tune["atr_period"])
 
         return {
             "macd_line": macd_line,

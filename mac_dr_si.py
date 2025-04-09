@@ -73,30 +73,30 @@ class BBadXMacDrSi(qx.BaseBot):
         }
 
         # Optimizer clamps to limit the parameter ranges for optimization
-        self.clamps = [
-            [5, 20, 1.0],  # macd_fast_period
-            [15, 50, 1.0],  # macd_slow_period
-            [5, 15, 1.0],  # macd_signal_period
-            [5, 30, 1.0],  # rsi_period
-            [5, 30, 1.0],  # adx_period
-            [0.0, 3.0, 0.1],  # rsi_zscore_buy_threshold
-            [-3.0, 0.0, 0.1],  # rsi_zscore_sell_threshold
-            [0.0, 3.0, 0.1],  # macd_zscore_buy_threshold
-            [-3.0, 0.0, 0.1],  # macd_zscore_sell_threshold
-            [-1, 1, 0.5],  # fft_filtered
-            [-1, 1, 0.5],  # fft_filtered
-            [1.5, 3.0, 0.1],  # bollinger_std_dev
-            [10, 50, 1.0],  # bollinger_window_size
-            [15.0, 40.0, 0.5],  # adx_threshold
-            [0.01, 0.5, 0.01],  # cutoff_frequency
-            [2, 5, 1],  # low_pass_order
-            [0, 1, 1],  # btype (low=0, high=1, etc.)
-            [0, 1, 1],  # analog (True=1, False=0)
-            [0.1, 2.0, 0.01],  # fft_d (Sampling interval)
-            [0, 1, 1],  # macd_comparison (0 = no flip, 1 = flipped)
-            [0, 1, 1],  # rsi_comparison (0 = no flip, 1 = flipped)
-            [0, 1, 1],  # fft_comparison (0 = no flip, 1 = flipped)
-        ]
+        self.clamps = {
+            "macd_fast_period": [5, 12.0, 20, 1.0],
+            "macd_slow_period": [15, 26.0, 50, 1.0],
+            "macd_signal_period": [5, 9.0, 15, 1.0],
+            "rsi_period": [5, 14.0, 30, 1.0],
+            "adx_period": [5, 14.0, 30, 1.0],
+            "rsi_zscore_buy_threshold": [0.0, 1.0, 3.0, 0.1],
+            "rsi_zscore_sell_threshold": [-3.0, -1.0, 0.0, 0.1],
+            "macd_zscore_buy_threshold": [0.0, 1.0, 3.0, 0.1],
+            "macd_zscore_sell_threshold": [-3.0, -1.0, 0.0, 0.1],
+            "fft_filtered_buy": [-1, 0.0, 1, 0.5],
+            "fft_filtered_sell": [-1, 0.0, 1, 0.5],
+            "bollinger_std_dev": [1.5, 2.0, 3.0, 0.1],
+            "bollinger_window_size": [10, 20, 50, 1.0],
+            "adx_threshold": [15.0, 25.0, 40.0, 0.5],
+            "cutoff_frequency": [0.01, 0.1, 0.5, 0.01],
+            "low_pass_order": [2, 3, 5, 1],
+            "btype": [0, 0, 1, 1],
+            "analog": [0, 1, 1, 1],
+            "fft_d": [0.1, 1.0, 2.0, 0.01],
+            "macd_comparison": [0, 0, 1, 1],
+            "rsi_comparison": [0, 0, 1, 1],
+            "fft_comparison": [0, 0, 1, 1],
+        }
 
         # Initialize storage for trade details (e.g., holding positions, last trade info)
         self.storage = {"hold": 0, "last_trade_time": 0, "trade_price": 0}
@@ -106,19 +106,15 @@ class BBadXMacDrSi(qx.BaseBot):
         Calculate key technical indicators (MACD, RSI, FFT, and ADX) for strategy decision-making.
         """
         # MACD calculation: MACD line and Signal line
-        macd_line, macd_signal, _ = qx.float_period(
-            qx.tu.macd,
-            (
+        macd_line, macd_signal, _ = qx.ti.macd(
                 data["close"],
                 self.tune["macd_fast_period"],
                 self.tune["macd_slow_period"],
                 self.tune["macd_signal_period"],
-            ),
-            (1, 2, 3),
-        )
+            )
 
         # RSI (Relative Strength Index) calculation: Momentum indicator that tells overbought/oversold conditions
-        rsi = qx.float_period(qx.tu.rsi, (data["close"], self.tune["rsi_period"]), (1,))
+        rsi = qx.ti.rsi(data["close"], self.tune["rsi_period"])
 
         # FFT (Fast Fourier Transform): Frequency analysis to detect underlying cyclical patterns
         fft_data = fft(data["close"])
@@ -129,11 +125,7 @@ class BBadXMacDrSi(qx.BaseBot):
         fft_filtered = self.low_pass_filter(fft_data)
 
         # ADX (Average Directional Index): Measures trend strength
-        adx = qx.float_period(
-            qx.tu.adx,
-            (data["high"], data["low"], data["close"], self.tune["adx_period"]),
-            (3,),
-        )
+        adx = qx.ti.adx(data["high"], data["low"], data["close"], self.tune["adx_period"])
 
         return {
             "macd_line": macd_line,

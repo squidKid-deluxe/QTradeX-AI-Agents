@@ -62,27 +62,23 @@ class ParabolicSARBot(qx.BaseBot):
             "buy": 5,
         }
 
-        self.clamps = [
-            # min, max, strength
-            # sar initial + acceleration
-            [0.001, 1.0, 0.5],
-            [0.001, 1.0, 0.5],
-            # sar scalars
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [1, 200, 1],
-            [2, 30, 0.5],
-            [1, 100, 1],
-            [1, 10, 1],
-            [1, 10, 1],
-        ]
+        self.clamps = {
+            "SAR_initial": [0.001, 0.02005274490409851, 1.0, 0.5],
+            "SAR_acceleration": [0.001, 0.2300077824125609, 1.0, 0.5],
+            "scalar_1": [1, 1.0, 200, 1],
+            "scalar_2": [1, 2.0, 200, 1],
+            "scalar_3": [1, 3.0, 200, 1],
+            "scalar_4": [1, 4.0, 200, 1],
+            "scalar_5": [1, 5.0, 200, 1],
+            "scalar_6": [1, 6.0, 200, 1],
+            "scalar_7": [1, 7.0, 200, 1],
+            "scalar_9": [1, 8.0, 200, 1],
+            "scalar_10": [1, 9.0, 200, 1],
+            "signal_period": [1, 2.0, 200, 1],
+            "ago": [2, 1, 30, 0.5],
+            "sell": [1, 5, 100, 1],
+            "buy": [1, 5, 10, 1],
+        }
 
         # Initialize storage for trade details
         self.storage = {"hold": 0}
@@ -97,7 +93,7 @@ class ParabolicSARBot(qx.BaseBot):
         # Calculate the SAR values for different scalars using self.tune
         sars = np.array(
             [
-                qx.tu.psar(
+                qx.ti.psar(
                     data["high"],
                     data["low"],
                     self.tune["SAR_initial"] / self.tune[f"scalar_{h}"],
@@ -108,9 +104,7 @@ class ParabolicSARBot(qx.BaseBot):
         ).T
 
         # Calculate the signal (simple moving average of close prices)
-        signal = qx.float_period(
-            qx.tu.ema, (data["close"], self.tune["signal_period"]), (1,)
-        )
+        signal = qx.ti.ema(data["close"], self.tune["signal_period"])
 
         return {
             "sars": sars[self.tune["ago"] :],

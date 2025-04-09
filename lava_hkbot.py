@@ -38,10 +38,10 @@ class LavaHK(qx.BaseBot):
             "ma2_period": 15.015159069473613,
         }
         # Initialize clamps (if needed for tuning parameters)
-        self.clamps = [
-            [5, 100, 0.5],  # For ma1
-            [10, 150, 0.5],  # For ma2
-        ]
+        self.clamps = {
+            "ma1_period": [5, 12.579159259860445, 100, 0.5],
+            "ma2_period": [10, 15.015159069473613, 150, 0.5],
+        }
 
         self.state = {}  # To store state information (like hkopen, ohlc4, etc.)
 
@@ -49,8 +49,8 @@ class LavaHK(qx.BaseBot):
         """
         Define the indicators using QX's indicators system.
         """
-        ma1 = qx.float_period(qx.tu.ema, (data["close"], self.tune["ma1_period"]), (1,))
-        ma2 = qx.float_period(qx.tu.ema, (data["close"], self.tune["ma2_period"]), (1,))
+        ma1 = qx.ti.ema(data["close"], self.tune["ma1_period"])
+        ma2 = qx.ti.ema(data["close"], self.tune["ma2_period"])
 
         # OHLC4 calculation
         ohlc4 = (data["open"] + data["high"] + data["low"] + data["close"]) / 4

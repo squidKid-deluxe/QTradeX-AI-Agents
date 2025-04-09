@@ -58,92 +58,72 @@ class CryptoMasterBot(qx.BaseBot):
             "sell_threshold": 6,  # Number of conditions for a sell signal
         }
 
-        self.clamps = [
-            [5, 100, 0.5],  # For SMA period
-            [5, 100, 0.5],  # For EMA period
-            [5, 50, 0.5],  # For RSI period
-            [5, 50, 0.5],  # For MACD short period
-            [5, 50, 0.5],  # For MACD long period
-            [5, 50, 0.5],  # For MACD signal period
-            [5, 100, 0.5],  # For Bollinger Bands period
-            [1, 5, 0.5],  # For Bollinger Bands standard deviation
-            [5, 50, 0.5],  # For Fisher Transform period
-            [5, 50, 0.5],  # For Stochastic k period
-            [5, 50, 0.5],  # For Stochastic kslow period
-            [5, 50, 0.5],  # For Stochastic d period
-            [5, 50, 0.5],  # For ADX period
-            [10, 50, 0.5],  # For ADX threshold
-            [5, 100, 0.5],  # For volatility period
-            [2, 6, 1],  # For buy threshold
-            [2, 6, 1],  # For sell threshold
-        ]
+        self.clamps = {
+            "sma_period": [5, 20.0, 100, 0.5],
+            "ema_period": [5, 14.0, 100, 0.5],
+            "rsi_period": [5, 14.0, 50, 0.5],
+            "macd_short_period": [5, 12.0, 50, 0.5],
+            "macd_long_period": [5, 26.0, 50, 0.5],
+            "macd_signal_period": [5, 9.0, 50, 0.5],
+            "bollinger_period": [5, 20.0, 100, 0.5],
+            "bollinger_deviation": [1, 2.0, 5, 0.5],
+            "fisher_period": [5, 14.0, 50, 0.5],
+            "stoch_k_period": [5, 14.0, 50, 0.5],
+            "stoch_kslow_period": [5, 3.0, 50, 0.5],
+            "stoch_d_period": [5, 14.0, 50, 0.5],
+            "adx_period": [5, 14.0, 50, 0.5],
+            "adx_threshold": [10, 25.0, 50, 0.5],
+            "volatility_period": [5, 14.0, 100, 0.5],
+            "buy_threshold": [2, 6, 6, 1],
+            "sell_threshold": [2, 6, 6, 1],
+        }
 
     def indicators(self, data):
         """
         Calculate the various indicators for the strategy.
         """
         # Simple Moving Average (SMA)
-        sma = qx.float_period(qx.tu.sma, (data["close"], self.tune["sma_period"]), (1,))
+        sma = qx.ti.sma(data["close"], self.tune["sma_period"])
 
         # Exponential Moving Average (EMA)
-        ema = qx.float_period(qx.tu.ema, (data["close"], self.tune["ema_period"]), (1,))
+        ema = qx.ti.ema(data["close"], self.tune["ema_period"])
 
         # Relative Strength Index (RSI)
-        rsi = qx.float_period(qx.tu.rsi, (data["close"], self.tune["rsi_period"]), (1,))
+        rsi = qx.ti.rsi(data["close"], self.tune["rsi_period"])
 
         # MACD (Moving Average Convergence Divergence)
-        macd, macd_signal, _ = qx.float_period(
-            qx.tu.macd,
-            (
+        macd, macd_signal, _ = qx.ti.macd(
                 data["close"],
                 self.tune["macd_short_period"],
                 self.tune["macd_long_period"],
                 self.tune["macd_signal_period"],
-            ),
-            (1, 2, 3),
-        )
+            )
 
         # Bollinger Bands
-        upper_band, middle_band, lower_band = qx.float_period(
-            qx.tu.bbands,
-            (
+        upper_band, middle_band, lower_band = qx.ti.bbands(
                 data["close"],
                 self.tune["bollinger_period"],
                 self.tune["bollinger_deviation"],
-            ),
-            (1, 2),
-        )
+            )
 
         # Fisher Transform
-        fisher, fisher_signal = qx.float_period(
-            qx.tu.fisher, (data["high"], data["low"], self.tune["fisher_period"]), (2,)
-        )
+        fisher, fisher_signal = qx.ti.fisher(data["high"], data["low"], self.tune["fisher_period"])
 
         # Stochastic Oscillator
-        stoch_k, stoch_d = qx.float_period(
-            qx.tu.stoch,
-            (
+        stoch_k, stoch_d = qx.ti.stoch(
                 data["high"],
                 data["low"],
                 data["close"],
                 self.tune["stoch_k_period"],
                 self.tune["stoch_kslow_period"],
                 self.tune["stoch_d_period"],
-            ),
-            (3, 4, 5),
-        )
-
+            )
+        
         # Average Directional Index (ADX)
-        adx = qx.float_period(
-            qx.tu.adx,
-            (data["high"], data["low"], data["close"], self.tune["adx_period"]),
-            (3,),
-        )
+        adx = qx.ti.adx(data["high"], data["low"], data["close"], self.tune["adx_period"])
 
         # Volatility indicator (standard deviation of price)
-        volatility = qx.float_period(
-            qx.tu.stddev, (data["close"], self.tune["volatility_period"]), (1,)
-        )
+        volatility = qx.ti.stddev(data["close"], self.tune["volatility_period"])
 
         return {
             "sma": sma,

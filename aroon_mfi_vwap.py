@@ -46,16 +46,18 @@ class AroonMfiVwap(qx.BaseBot):
             "aroon_sell": 0.0,
         }
 
-        self.clamps = [
+        # fmt: off
+        self.clamps = {
             # min, max, strength
-            [1, 200, 0.5],
-            [1, 200, 0.5],
-            [1, 200, 0.5],
-            [1, 200, 0.5],
-            [1, 200, 0.5],
-            [0, 100, 1],
-            [0, 100, 1],
-        ]
+            "short_period": [1, 2.0,  200, 0.5],
+            "vwap_period":  [1, 8.0,  200, 0.5],
+            "mfi_period":   [1, 30.0, 200, 0.5],
+            "mfi":          [1, 41.0, 200, 0.5],
+            "aroon_period": [1, 105,  200, 0.5],
+            "aroon_buy":    [0, 0.0,  100, 1],
+            "aroon_sell":   [0, 0.0,  100, 1],
+        }
+        # fmt: on
 
     def plot(self, *args):
         qx.plot(
@@ -70,26 +72,16 @@ class AroonMfiVwap(qx.BaseBot):
         )
 
     def indicators(self, data):
-        short_ema = qx.float_period(
-            qx.tu.ema, (data["close"], self.tune["short_period"]), (1,)
-        )
-        mfi = qx.float_period(
-            qx.tu.mfi,
-            (
+        short_ema = qx.ti.ema(data["close"], self.tune["short_period"])
+        mfi = qx.ti.mfi(
                 data["high"],
                 data["low"],
                 data["close"],
                 data["volume"],
                 self.tune["mfi_period"],
-            ),
-            (4,),
-        )
-        vwap = qx.float_period(
-            qx.tu.vwma, (data["close"], data["volume"], self.tune["vwap_period"]), (2,)
-        )
-        aroon_down, aroon_up = qx.float_period(
-            qx.tu.aroon, (data["high"], data["low"], self.tune["aroon_period"]), (2,)
-        )
+            )
+        vwap = qx.ti.vwma(data["close"], data["volume"], self.tune["vwap_period"])
+        aroon_down, aroon_up = qx.ti.aroon(data["high"], data["low"], self.tune["aroon_period"])
 
         return {
             "short_ema": short_ema,

@@ -49,55 +49,45 @@ class Confluence(qx.BaseBot):
             "bollinger_stddev": 2.0,  # Bollinger Bands standard deviation
         }
         # Optimizer clamps (min, max, strength)
-        self.clamps = [
-            [5, 100, 0.5],  # For ma1
-            [10, 150, 0.6],  # For ma2
-            [5, 30, 0.5],  # For RSI
-            [5, 50, 0.6],  # For MACD periods
-            [5, 50, 0.6],  # For MACD periods
-            [5, 50, 0.6],  # For MACD periods
-            [10, 50, 0.5],  # For Bollinger Bands period
-            [1, 3, 0.5],  # For Bollinger Bands standard deviation
-        ]
+        self.clamps = {
+            "ma1_period": [5, 5.0, 100, 0.5],
+            "ma2_period": [10, 20.0, 150, 0.6],
+            "rsi_period": [5, 14.0, 30, 0.5],
+            "macd_fast_period": [5, 12.0, 50, 0.6],
+            "macd_slow_period": [5, 26.0, 50, 0.6],
+            "macd_signal_period": [5, 9.0, 50, 0.6],
+            "bollinger_period": [10, 20.0, 50, 0.5],
+            "bollinger_stddev": [1, 2.0, 3, 0.5],
+        }
 
     def indicators(self, data):
         """
         Calculate the indicators used in the strategy.
         """
         # EMA Crossovers
-        ma1 = qx.float_period(qx.tu.ema, (data["close"], self.tune["ma1_period"]), (1,))
-        ma2 = qx.float_period(qx.tu.ema, (data["close"], self.tune["ma2_period"]), (1,))
+        ma1 = qx.ti.ema(data["close"], self.tune["ma1_period"])
+        ma2 = qx.ti.ema(data["close"], self.tune["ma2_period"])
 
         # RSI
-        rsi = qx.float_period(qx.tu.rsi, (data["close"], self.tune["rsi_period"]), (1,))
+        rsi = qx.ti.rsi(data["close"], self.tune["rsi_period"])
 
         # MACD
-        macd_line, macd_signal, macd_histogram = qx.float_period(
-            qx.tu.macd,
-            (
+        macd_line, macd_signal, macd_histogram = qx.ti.macd(
                 data["close"],
                 self.tune["macd_fast_period"],
                 self.tune["macd_slow_period"],
                 self.tune["macd_signal_period"],
-            ),
-            (1, 1, 1),
-        )
+            )
 
         # Bollinger Bands
-        bollinger_upper, bollinger_middle, bollinger_lower = qx.float_period(
-            qx.tu.bbands,
-            (
+        bollinger_upper, bollinger_middle, bollinger_lower = qx.ti.bbands(
                 data["close"],
                 self.tune["bollinger_period"],
                 self.tune["bollinger_stddev"],
-            ),
-            (1, 1, 1),
-        )
+            )
 
         # Volume (default to simple volume)
-        volume = qx.float_period(
-            qx.tu.sma, (data["volume"], self.tune["bollinger_period"]), (1,)
-        )
+        volume = qx.ti.sma(data["volume"], self.tune["bollinger_period"])
 
         return {
             "ma1": ma1,

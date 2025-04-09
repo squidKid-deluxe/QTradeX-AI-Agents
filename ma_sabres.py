@@ -66,31 +66,31 @@ class MASabres(qx.BaseBot):
         }
 
         # Clamps for tuning values
-        self.clamps = [
-            [5, 200, 0.5],  # MA Length clamp
-            [5, 200, 0.5],  # MA Length clamp
-            [5, 200, 0.5],  # MA Length clamp
-            [5, 200, 0.5],  # MA Length clamp
-            [5, 200, 0.5],  # MA Length clamp
-            [0, 11, 1],  # MA Type clamp
-            [0, 11, 1],  # MA Type clamp
-            [0, 11, 1],  # MA Type clamp
-            [0, 11, 1],  # MA Type clamp
-            [0, 11, 1],  # MA Type clamp
-            [-1, 1, 0.5],  # bull/bear slope clamps
-            [-1, 1, 0.5],  # bull/bear slope clamps
-            [-1, 1, 0.5],  # bull/bear slope clamps
-            [-1, 1, 0.5],  # bull/bear slope clamps
-            [-1, 1, 0.5],  # bull/bear slope clamps
-            [-1, 1, 0.5],  # bull/bear slope clamps
-            [-1, 1, 0.5],  # bull/bear slope clamps
-            [-1, 1, 0.5],  # bull/bear slope clamps
-            [-1, 1, 0.5],  # bull/bear slope clamps
-            [-1, 1, 0.5],  # bull/bear slope clamps
-            [1, 5, 1],
-            [1, 5, 1],
-            [0, 5, 1],
-        ]
+        self.clamps = {
+            "ma1_period": [5, 5.0, 200, 0.5],
+            "ma2_period": [5, 10.0, 200, 0.5],
+            "ma3_period": [5, 15.0, 200, 0.5],
+            "ma4_period": [5, 20.0, 200, 0.5],
+            "ma5_period": [5, 25.0, 200, 0.5],
+            "ma1_type": [0, 11, 11, 1],
+            "ma2_type": [0, 11, 11, 1],
+            "ma3_type": [0, 11, 11, 1],
+            "ma4_type": [0, 11, 11, 1],
+            "ma5_type": [0, 11, 11, 1],
+            "bear1": [-1, 0.1, 1, 0.5],
+            "bear2": [-1, 0.1, 1, 0.5],
+            "bear3": [-1, 0.1, 1, 0.5],
+            "bear4": [-1, 0.1, 1, 0.5],
+            "bear5": [-1, 0.1, 1, 0.5],
+            "bull1": [-1, 0.1, 1, 0.5],
+            "bull2": [-1, 0.1, 1, 0.5],
+            "bull3": [-1, 0.1, 1, 0.5],
+            "bull4": [-1, 0.1, 1, 0.5],
+            "bull5": [-1, 0.1, 1, 0.5],
+            "bullish": [1, 4.0, 5, 1],
+            "bearish": [1, 4.0, 5, 1],
+            "thresh": [0, 2.0, 5, 1],
+        }
 
     def indicators(self, data):
         """
@@ -100,26 +100,22 @@ class MASabres(qx.BaseBot):
         for i in range(5):
             i += 1
             func = [
-                qx.tu.dema,
-                qx.tu.ema,
-                qx.tu.hma,
-                qx.tu.kama,
-                qx.tu.linreg,
-                qx.tu.sma,
-                qx.tu.tema,
-                qx.tu.trima,
-                qx.tu.tsf,
-                qx.tu.vwma,
-                qx.tu.wma,
-                qx.tu.zlema,
+                qx.ti.dema,
+                qx.ti.ema,
+                qx.ti.hma,
+                qx.ti.kama,
+                qx.ti.linreg,
+                qx.ti.sma,
+                qx.ti.tema,
+                qx.ti.trima,
+                qx.ti.tsf,
+                qx.ti.vwma,
+                qx.ti.wma,
+                qx.ti.zlema,
             ][self.tune[f"ma{i}_type"]]
             if self.tune[f"ma{i}_type"] == 9:
                 ret[f"ma{i}_slope"] = qx.derivative(
-                    qx.float_period(
-                        func,
-                        (data["close"], data["volume"], self.tune[f"ma{i}_period"]),
-                        (2,),
-                    )
+                    func(data["close"], data["volume"], self.tune[f"ma{i}_period"])
                 )
                 ret[f"ma{i}_slope"], data_close = qx.truncate(
                     ret[f"ma{i}_slope"], data["close"]
@@ -127,9 +123,7 @@ class MASabres(qx.BaseBot):
                 ret[f"ma{i}_slope"] = ret[f"ma{i}_slope"] / data_close * 10
             else:
                 ret[f"ma{i}_slope"] = qx.derivative(
-                    qx.float_period(
-                        func, (data["close"], self.tune[f"ma{i}_period"]), (1,)
-                    )
+                    func(data["close"], self.tune[f"ma{i}_period"])
                 )
                 ret[f"ma{i}_slope"], data_close = qx.truncate(
                     ret[f"ma{i}_slope"], data["close"]

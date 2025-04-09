@@ -59,31 +59,30 @@ class ExtinctionEvent(qx.BaseBot):
             "despair ratio": 0.5,
         }
 
-        self.clamps = [
-            [5, 100, 0.5],
-            [5, 100, 0.5],
-            [5, 100, 0.5],
-            [0.9, 1.2, 0.5],
-            [0.9, 1.2, 0.5],
-            [0.25, 0.75, 0.5],
-            [0.9, 1.2, 0.5],
-            [0.9, 1.2, 0.5],
-            [0.25, 0.75, 0.5],
-            [0.9, 1.2, 0.5],
-            [0.9, 1.2, 0.5],
-            [0.25, 0.75, 0.5],
-            [0.9, 1.2, 0.5],
-            [0.9, 1.2, 0.5],
-            [0.25, 0.75, 0.5],
-        ]
+        self.clamps = {
+            "ma1_period": [5, 5.8, 100, 0.5],
+            "ma2_period": [5, 15.0, 100, 0.5],
+            "ma3_period": [5, 30.0, 100, 0.5],
+            "selloff ma1": [0.9, 1.1, 1.2, 0.5],
+            "selloff ma2": [0.9, 1.1, 1.2, 0.5],
+            "selloff ratio": [0.25, 0.5, 0.75, 0.5],
+            "support ma1": [0.9, 1.0, 1.2, 0.5],
+            "support ma2": [0.9, 1.0, 1.2, 0.5],
+            "support ratio": [0.25, 0.5, 0.75, 0.5],
+            "resistance ma1": [0.9, 1.0, 1.2, 0.5],
+            "resistance ma2": [0.9, 1.0, 1.2, 0.5],
+            "resistance ratio": [0.25, 0.5, 0.75, 0.5],
+            "despair ma1": [0.9, 0.9, 1.2, 0.5],
+            "despair ma2": [0.9, 0.9, 1.2, 0.5],
+            "despair ratio": [0.25, 0.5, 0.75, 0.5],
+        }
 
     def indicators(self, data):
         metrics = {
-            tag.split("_")[0]: qx.float_period(
-                qx.tu.ema, (data["close"], self.tune[tag]), (1,)
-            )
+            tag.rsplit("_", 1)[0]: qx.ti.ema(data["close"], self.tune[tag])
             for tag in ["ma1_period", "ma2_period", "ma3_period"]
         }
+        metrics["ma_exec"] = qx.ti.ema(data["close"], 2)
         metrics["support"] = []
         metrics["selloff"] = []
         metrics["despair"] = []
@@ -98,24 +97,27 @@ class ExtinctionEvent(qx.BaseBot):
         for ma1, ma2, ma3, low, high in zip(
             metrics["ma1"], metrics["ma2"], metrics["ma3"], data["low"], data["high"]
         ):
-            metrics["support"].append(
-                ma1 * self.tune["support ma1"] * self.tune["support ratio"]
-                + ma2 * self.tune["support ma2"] * (1 - self.tune["support ratio"])
-            )
-            metrics["selloff"].append(
-                ma1 * self.tune["selloff ma1"] * self.tune["selloff ratio"]
-                + ma2 * self.tune["selloff ma2"] * (1 - self.tune["selloff ratio"])
-            )
-            metrics["despair"].append(
-                ma1 * self.tune["despair ma1"] * self.tune["despair ratio"]
-                + ma2 * self.tune["despair ma2"] * (1 - self.tune["despair ratio"])
-            )
-            metrics["resistance"].append(
-                ma1 * self.tune["resistance ma1"] * self.tune["resistance ratio"]
-                + ma2
-                * self.tune["resistance ma2"]
-                * (1 - self.tune["resistance ratio"])
-            )
+            support = ma1 * self.tune["support ma1"] * self.tune[
+                "support ratio"
+            ] + ma2 * self.tune["support ma2"] * (1 - self.tune["support ratio"])
+            selloff = ma1 * self.tune["selloff ma1"] * self.tune[
+                "selloff ratio"
+            ] + ma2 * self.tune["selloff ma2"] * (1 - self.tune["selloff ratio"])
+            despair = ma1 * self.tune["despair ma1"] * self.tune[
+                "despair ratio"
+            ] + ma2 * self.tune["despair ma2"] * (1 - self.tune["despair ratio"])
+            resistance = ma1 * self.tune["resistance ma1"] * self.tune[
+                "resistance ratio"
+            ] + ma2 * self.tune["resistance ma2"] * (1 - self.tune["resistance ratio"])
+
+            # SECURITY: prevent flash trading risk
+            support, selloff = sorted([support, selloff])
+            despair, resistance = sorted([despair, resistance])
+
+            metrics["selloff"].append(selloff)
+            metrics["support"].append(support)
+            metrics["resistance"].append(resistance)
+            metrics["despair"].append(despair)
 
             if low > ma3 and trend != "bull":
                 trend = "bull"
@@ -155,7 +157,7 @@ class ExtinctionEvent(qx.BaseBot):
         )
 
         axes[0].fill_between(
-            states["unix"],
+            states["dates"],
             indicators["selloff"],
             indicators["support"],
             color="lime",
@@ -165,7 +167,7 @@ class ExtinctionEvent(qx.BaseBot):
         )
 
         axes[0].fill_between(
-            states["unix"],
+            states["dates"],
             indicators["resistance"],
             indicators["despair"],
             color="tomato",
@@ -192,6 +194,15 @@ class ExtinctionEvent(qx.BaseBot):
             )
         return ret
 
+    def execution(self, signal, indicators, wallet):
+        if isinstance(signal, qx.Buy):
+            ret = qx.Buy(indicators["ma_exec"])
+        elif isinstance(signal, qx.Sell):
+            ret = qx.Sell(indicators["ma_exec"])
+        else:
+            ret = signal
+        return ret
+
     def fitness(self, states, raw_states, asset, currency):
         return [
             "roi_assets",
@@ -205,14 +216,15 @@ class ExtinctionEvent(qx.BaseBot):
 
 
 def main():
-    asset, currency = "BTC", "USDT"
+    asset, currency = "XBTSX.BTC", "XBTSX.USDT"
     wallet = qx.PaperWallet({asset: 0, currency: 1})
     data = qx.Data(
-        exchange="kucoin",
+        exchange="bitshares",
         asset=asset,
         currency=currency,
-        begin="2021-01-01",
-        end="2023-01-01",
+        # pool="1.19.160",
+        begin="2020-01-01",
+        # end="2023-01-01",
     )
 
     bot = ExtinctionEvent()

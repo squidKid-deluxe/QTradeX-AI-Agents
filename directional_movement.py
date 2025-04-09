@@ -61,44 +61,38 @@ class DirectionalMovement(qx.BaseBot):
             "adx_sideways_threshold": 20,
         }
 
-        self.clamps = [
-            [5, 50, 0.5],
-            [5, 50, 0.5],
-            [5, 50, 0.5],
-            [5, 50, 1],
-            [5, 50, 1],
-            [5, 50, 1],
-            [0.0001, 1, 1],
-            [0.0001, 1, 1],
-            [0.0001, 1, 1],
-            [1, 100, 0.5],
-            [1, 100, 0.5],
-            [0.1, 5, 1],
-        ]
+        self.clamps = {
+            "short_period": [5, 11.592640026040238, 50, 0.5],
+            "mid_period": [5, 21.58509273978805, 50, 0.5],
+            "long_period": [5, 12.987307578622156, 50, 0.5],
+            "dm_period": [5, 40.13268029378086, 50, 1],
+            "adx_period": [5, 10.436935163548062, 50, 1],
+            "adxr_period": [5, 11.954841773583773, 50, 1],
+            "cluster_thresh": [0.0001, 0.10722428771472528, 1, 1],
+            "sideways_up": [0.0001, 0.015042995797401927, 1, 1],
+            "sideways_down": [0.0001, 0.03924366495290047, 1, 1],
+            "minus_dm_thresh": [1, 100.7504494785171, 100, 0.5],
+            "minus_plus_dm_thresh": [1, 67.14110610491225, 100, 0.5],
+            "plus_dm_ratio": [0.1, 1.1663845194059757, 5, 1],
+        }
 
     def indicators(self, data):
         """
         Compute and return the necessary indicators
         """
-        ma_short = qx.float_period(
-            qx.tu.ema, (data["close"], self.tune["short_period"]), (1,)
-        )
-        ma_mid = qx.float_period(
-            qx.tu.ema, (data["close"], self.tune["mid_period"]), (1,)
-        )
-        ma_long_ptick = qx.float_period(
-            qx.tu.ema, (data["close"], self.tune["long_period"]), (1,)
-        )
+        ma_short = qx.ti.ema(data["close"], self.tune["short_period"])
+        ma_mid = qx.ti.ema(data["close"], self.tune["mid_period"])
+        ma_long_ptick = qx.ti.ema(data["close"], self.tune["long_period"])
         ma_long = ma_long_ptick[:-1]
 
         # Directional Movement Indicators (DM+ and DM-)
-        plus_dm, minus_dm = qx.tu.dm(data["high"], data["low"], self.tune["dm_period"])
+        plus_dm, minus_dm = qx.ti.dm(data["high"], data["low"], self.tune["dm_period"])
 
         # ADX and ADXR
-        adx = qx.tu.adx(
+        adx = qx.ti.adx(
             data["high"], data["low"], data["close"], self.tune["adx_period"]
         )
-        adxr = qx.tu.adxr(
+        adxr = qx.ti.adxr(
             data["high"], data["low"], data["close"], self.tune["adxr_period"]
         )
 
