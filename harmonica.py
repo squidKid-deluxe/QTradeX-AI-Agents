@@ -185,6 +185,7 @@ class ParabolicSARBot(qx.BaseBot):
 
     def plot(self, *args):
         qx.plot(
+            self.info,
             *args,
             (
                 ("ma1", "MA 1", "white", 0, "SAR Harmonica"),

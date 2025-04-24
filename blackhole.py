@@ -63,7 +63,9 @@ class BlackHoleStrategy(qx.BaseBot):
     def indicators(self, data):
         metrics = {
             "sma": qx.ti.sma(data["close"], self.tune["sma_period"]),
-            "atr": qx.ti.atr(data["high"], data["low"], data["close"], self.tune["atr_period"]),
+            "atr": qx.ti.atr(
+                data["high"], data["low"], data["close"], self.tune["atr_period"]
+            ),
         }
 
         # Detect volatility surge
@@ -100,6 +102,7 @@ class BlackHoleStrategy(qx.BaseBot):
 
     def plot(self, data, states, indicators, block):
         axes = qx.plot(
+            self.info,
             data,
             states,
             indicators,

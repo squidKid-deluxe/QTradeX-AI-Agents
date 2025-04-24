@@ -45,7 +45,12 @@ class EmaCross(qx.BaseBot):
             "ma2_period": 10.0,
             "threshold": 1.0,
         }
-        # optimizer clamps (min, initial, max, strength)
+        self.tune = {
+            "ma1_period": 5,
+            "ma2_period": 140.0,
+            "threshold": 1.03,
+        }
+        # optimizer clamps (min, max, strength)
         self.clamps = {
             "ma1_period": [5, 5, 100, 1],
             "ma2_period": [10, 10.0, 150, 1],
@@ -53,13 +58,20 @@ class EmaCross(qx.BaseBot):
         }
 
     def indicators(self, data):
+        newdata = qx.qi.heikin_ashi(data.raw_candles)
+
         # tulip indicators are exposed via qx.indicators.tulipy
         # and cached on backend for optimization speed
         ma1 = qx.ti.sma(data["close"], self.tune["ma1_period"])
+        ma12 = qx.ti.sma(newdata["ha_close"], self.tune["ma1_period"])
         return {
-            "top": ma1 * self.tune["threshold"],
-            "bottom": ma1 / self.tune["threshold"],
-            "ma2": qx.ti.sma(data["close"], self.tune["ma2_period"]),
+            "top_1": ma1 * self.tune["threshold"],
+            "bottom_1": ma1 / self.tune["threshold"],
+            "ma2_1": qx.ti.sma(data["close"], self.tune["ma2_period"]),
+            #
+            "top_2": ma12 * self.tune["threshold"],
+            "bottom_2": ma12 / self.tune["threshold"],
+            "ma2_2": qx.ti.sma(newdata["ha_close"], self.tune["ma2_period"]),
         }
 
     def plot(self, *args):
@@ -68,20 +80,24 @@ class EmaCross(qx.BaseBot):
             *args,
             (
                 # key, name, color, index, title
-                ("top", "MA 1 Top", "white", 0, "Main"),
-                ("bottom", "MA 1 Bottom", "white", 0, "Main"),
-                ("ma2", "MA 2", "cyan", 0, "Main"),
+                ("top_1", "MA 1 Top", "white", 0, ""),
+                ("bottom_1", "MA 1 Bottom", "white", 0, ""),
+                ("ma2_1", "MA 2", "cyan", 0, ""),
+                # key, name, color, index, title
+                ("top_2", "MA 1 Top", "lime", 0, ""),
+                ("bottom_2", "MA 1 Bottom", "lime", 0, ""),
+                ("ma2_2", "MA 2", "blue", 0, "Heikin Ashi SMA Cross"),
             ),
         )
 
     def strategy(self, state, indicators):
         if state["last_trade"] is None:
             return qx.Buy()
-        if indicators["bottom"] > indicators["ma2"] and isinstance(
+        if indicators["bottom_2"] > indicators["ma2_2"] and isinstance(
             state["last_trade"], qx.Sell
         ):
             return qx.Buy()
-        if indicators["top"] < indicators["ma2"] and isinstance(
+        if indicators["top_2"] < indicators["ma2_2"] and isinstance(
             state["last_trade"], qx.Buy
         ):
             return qx.Sell()
@@ -98,32 +114,12 @@ class EmaCross(qx.BaseBot):
 def main():
     asset, currency = "BTC", "USDT"
     wallet = qx.PaperWallet({asset: 0, currency: 1})
-    # data = qx.Data(
-    #     exchange="kucoin",
-    #     asset=asset,
-    #     currency=currency,
-    #     begin="2021-01-01",
-    #     end="2025-01-01",
-    # )
-
-    # asset, currency = "TSLA", "USD"
-    # wallet = qx.PaperWallet({asset: 0, currency: 1})
-    # data = qx.Data(
-    #     exchange="yahoo",
-    #     asset=asset,
-    #     currency=currency,
-    #     begin="2020-02-01",
-    #     end="2025-01-01",
-    # )
-
-    asset, currency = "KS11", "KRW"
-    wallet = qx.PaperWallet({asset: 0, currency: 1})
     data = qx.Data(
-        exchange="finance data reader",
+        exchange="kucoin",
         asset=asset,
         currency=currency,
-        begin="2022-01-01",
-        end="2022-12-31",
+        begin="2021-01-01",
+        end="2025-01-01",
     )
 
     bot = EmaCross()

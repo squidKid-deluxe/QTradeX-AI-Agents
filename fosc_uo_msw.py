@@ -114,13 +114,13 @@ class UltimateForecastMesa(qx.BaseBot):
         """
         # Ultimate Oscillator (UO)
         uo = qx.ti.ultosc(
-                data["high"],
-                data["low"],
-                data["close"],
-                self.tune["uo_short_period"],
-                self.tune["uo_medium_period"],
-                self.tune["uo_long_period"],
-            )
+            data["high"],
+            data["low"],
+            data["close"],
+            self.tune["uo_short_period"],
+            self.tune["uo_medium_period"],
+            self.tune["uo_long_period"],
+        )
 
         # Derivative of Ultimate Oscillator (UO)
         uo_derivative = qx.derivative(uo)
@@ -151,6 +151,7 @@ class UltimateForecastMesa(qx.BaseBot):
         Plot indicators for visual analysis.
         """
         qx.plot(
+            self.info,
             *args,
             (
                 ("uo", "Ultimate Oscillator", "yellow", 3, "Confluence"),

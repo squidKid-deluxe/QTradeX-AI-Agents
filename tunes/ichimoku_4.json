@@ -1,0 +1,81 @@
+{
+ "source": "import numpy as np\nimport qtradex as qx\n\n\nclass IchimokuBot(qx.BaseBot):\n    def __init__(self):\n        # Ichimoku parameters\n        self.tune = {\n            \"tenkan_period\": 9.5,\n            \"kijun_period\": 26.1,\n            \"senkou_b_period\": 52.9,\n            \"senkou_span\": 26.2,\n        }\n        # fmt: off\n        self.clamps = {\n            \"tenkan_period\":   [5,  9.0, 150, 1],\n            \"kijun_period\":    [5, 26.0, 150, 1],\n            \"senkou_b_period\": [5, 52.0, 150, 1],\n            \"senkou_span\":     [5, 26.0, 150, 1],\n        }\n        # fmt: on\n\n    def indicators(self, data):\n        # Calculate Ichimoku components using the provided ichimoku function\n        tenkan_sen, kijun_sen, senkou_span_a, senkou_span_b, chikou_span = qx.qi.ichimoku(\n            data[\"high\"],\n            data[\"low\"],\n            data[\"close\"],\n            self.tune[\"tenkan_period\"],\n            self.tune[\"kijun_period\"],\n            self.tune[\"senkou_b_period\"],\n            self.tune[\"senkou_span\"]\n        )\n\n        # Return the calculated indicators\n        return {\n            \"tenkan\": tenkan_sen,\n            \"kijun\": kijun_sen,\n            \"senkou_A\": senkou_span_a,\n            \"senkou_B\": senkou_span_b,\n            \"chikou\": chikou_span,\n        }\n\n    def plot(self, *args):\n        qx.plot(\n            self.info,\n            *args,\n            (\n                (\"tenkan\", \"Tenkan-sen\", \"green\", 0, \"Main\"),\n                (\"kijun\", \"Kijun-sen\", \"red\", 0, \"Main\"),\n                (\"senkou_A\", \"Senkou Span A\", \"blue\", 0, \"Main\"),\n                (\"senkou_B\", \"Senkou Span B\", \"orange\", 0, \"Main\"),\n            ),\n        )\n\n    def strategy(self, state, indicators):\n        if state[\"last_trade\"] is None:\n            return qx.Buy()\n\n        # Buy signal: Senkou A crosses above Senkou B\n        if indicators[\"senkou_A\"] > indicators[\"senkou_B\"] and isinstance(state[\"last_trade\"], qx.Sell):\n            return qx.Buy()\n\n        # Sell signal: Senkou A crosses below Senkou B\n        if indicators[\"senkou_A\"] < indicators[\"senkou_B\"] and isinstance(state[\"last_trade\"], qx.Buy):\n            return qx.Sell()\n\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_gross\",\n            \"sortino_ratio\",\n            \"trade_win_rate\",\n        ], {}\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2025-01-01\",\n    )\n\n    bot = IchimokuBot()\n    qx.dispatch(bot, data, wallet)\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Sat Apr 12 16:55:44 2025": {
+  "tune": {
+   "tenkan_period": 35.208333333333336,
+   "kijun_period": 26.1,
+   "senkou_b_period": 52.9,
+   "senkou_span": 26.2
+  },
+  "results": {
+   "roi": 3.1045095599366554,
+   "sortino_ratio": 2.0545095599366556,
+   "trade_win_rate": 0.5
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Sat Apr 12 16:55:49 2025": {
+  "tune": {
+   "tenkan_period": 35.208333333333336,
+   "kijun_period": 26.1,
+   "senkou_b_period": 52.9,
+   "senkou_span": 26.2
+  },
+  "results": {
+   "roi": 3.1045095599366554,
+   "sortino_ratio": 2.0545095599366556,
+   "trade_win_rate": 0.5
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Sat Apr 12 16:55:49 2025": {
+  "tune": {
+   "tenkan_period": 89.58333333333334,
+   "kijun_period": 150.0,
+   "senkou_b_period": 5.0,
+   "senkou_span": 26.2
+  },
+  "results": {
+   "roi": 0.8771940101993759,
+   "sortino_ratio": -0.17280598980062412,
+   "trade_win_rate": 0.6607142857142857
+  }
+ },
+ "BEST ROI TUNE_Sat Apr 12 16:56:29 2025": {
+  "tune": {
+   "tenkan_period": 35.50653282901672,
+   "kijun_period": 27.632055739436282,
+   "senkou_b_period": 53.518850650722044,
+   "senkou_span": 25.018579606910354
+  },
+  "results": {
+   "roi": 3.3094208643592378,
+   "sortino_ratio": 2.259420864359238,
+   "trade_win_rate": 0.5
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Sat Apr 12 16:56:29 2025": {
+  "tune": {
+   "tenkan_period": 35.208333333333336,
+   "kijun_period": 27.196978130278765,
+   "senkou_b_period": 53.821273164127966,
+   "senkou_span": 26.199733865246476
+  },
+  "results": {
+   "roi": 3.309420864359238,
+   "sortino_ratio": 2.259420864359238,
+   "trade_win_rate": 0.5
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Sat Apr 12 16:56:29 2025": {
+  "tune": {
+   "tenkan_period": 33.966296348334566,
+   "kijun_period": 28.544394422549704,
+   "senkou_b_period": 51.79094384331157,
+   "senkou_span": 25.838272945264013
+  },
+  "results": {
+   "roi": 2.7345962289763754,
+   "sortino_ratio": 1.6845962289763754,
+   "trade_win_rate": 0.5377745890355372
+  }
+ }
+}

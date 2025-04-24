@@ -77,16 +77,18 @@ class ClassicalCryptoBot(qx.BaseBot):
 
         # Stochastic Oscillator (Stoch)
         stoch_k, stoch_d = qx.ti.stoch(
-                data["high"],
-                data["low"],
-                data["close"],
-                self.tune["stoch_k_period"],
-                self.tune["stoch_kslow_period"],
-                self.tune["stoch_d_period"],
-            )
+            data["high"],
+            data["low"],
+            data["close"],
+            self.tune["stoch_k_period"],
+            self.tune["stoch_kslow_period"],
+            self.tune["stoch_d_period"],
+        )
 
         # Average Directional Index (ADX)
-        adx = qx.ti.adx(data["high"], data["low"], data["close"], self.tune["adx_period"])
+        adx = qx.ti.adx(
+            data["high"], data["low"], data["close"], self.tune["adx_period"]
+        )
 
         return {
             "sma": sma,
@@ -102,6 +104,7 @@ class ClassicalCryptoBot(qx.BaseBot):
         Plot indicators for visual analysis.
         """
         qx.plot(
+            self.info,
             *args,
             (
                 ("sma", "SMA", "yellow", 0, "Trend"),

@@ -107,11 +107,11 @@ class BBadXMacDrSi(qx.BaseBot):
         """
         # MACD calculation: MACD line and Signal line
         macd_line, macd_signal, _ = qx.ti.macd(
-                data["close"],
-                self.tune["macd_fast_period"],
-                self.tune["macd_slow_period"],
-                self.tune["macd_signal_period"],
-            )
+            data["close"],
+            self.tune["macd_fast_period"],
+            self.tune["macd_slow_period"],
+            self.tune["macd_signal_period"],
+        )
 
         # RSI (Relative Strength Index) calculation: Momentum indicator that tells overbought/oversold conditions
         rsi = qx.ti.rsi(data["close"], self.tune["rsi_period"])
@@ -125,7 +125,9 @@ class BBadXMacDrSi(qx.BaseBot):
         fft_filtered = self.low_pass_filter(fft_data)
 
         # ADX (Average Directional Index): Measures trend strength
-        adx = qx.ti.adx(data["high"], data["low"], data["close"], self.tune["adx_period"])
+        adx = qx.ti.adx(
+            data["high"], data["low"], data["close"], self.tune["adx_period"]
+        )
 
         return {
             "macd_line": macd_line,
@@ -164,6 +166,7 @@ class BBadXMacDrSi(qx.BaseBot):
         Plot various indicators for analysis, including MACD, RSI, FFT, and ADX.
         """
         qx.plot(
+            self.info,
             *args,
             (
                 ("macd_line", "MACD Line", "blue", 0, "BBadXMacDrSi"),

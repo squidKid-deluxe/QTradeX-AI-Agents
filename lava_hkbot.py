@@ -92,6 +92,7 @@ class LavaHK(qx.BaseBot):
         Plot the indicators for visual feedback.
         """
         qx.plot(
+            self.info,
             *args,
             (
                 ("ma1", "MA 1", "white", 0, "Main"),

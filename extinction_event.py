@@ -146,6 +146,7 @@ class ExtinctionEvent(qx.BaseBot):
 
     def plot(self, data, states, indicators, block):
         axes = qx.plot(
+            self.info,
             data,
             states,
             indicators,
@@ -164,6 +165,7 @@ class ExtinctionEvent(qx.BaseBot):
             alpha=0.3,
             where=[i == "bull" for i in indicators["trend"]],
             label="Support/Selloff",
+            step="post",
         )
 
         axes[0].fill_between(
@@ -174,6 +176,7 @@ class ExtinctionEvent(qx.BaseBot):
             alpha=0.4,
             where=qx.expand_bools([i == "bear" for i in indicators["trend"]]),
             label="Resistance/Despair",
+            step="post",
         )
 
         axes[0].legend()

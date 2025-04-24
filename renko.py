@@ -184,6 +184,7 @@ class Renko(qx.BaseBot):
         warning_zone_low = args[0]["warning_zone_low"]
 
         qx.plot(
+            self.info,
             *args,
             (
                 ("renko_close", "Renko Close", "green", 0, "Main"),

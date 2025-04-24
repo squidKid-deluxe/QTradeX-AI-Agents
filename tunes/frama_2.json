@@ -1,0 +1,36 @@
+{
+ "source": "import numpy as np\nimport qtradex as qx\n\n\nclass FRAMABot(qx.BaseBot):\n    def __init__(self):\n        # FRAMA parameters\n        self.tune = {\n            \"period\": 14.0,\n            \"fractal_period\": 2.0,\n        }\n        self.clamps = {\n            \"period\": [2, 14.0, 100, 1],\n            \"fractal_period\": [2, 2.0, 100, 1],\n        }\n\n    def indicators(self, data):\n        # Calculate FRAMA using the provided frama function\n        frama_values = qx.qi.frama(\n            data[\"close\"],\n            self.tune[\"period\"],\n            self.tune[\"fractal_period\"]\n        )\n\n        # Return the calculated indicators\n        return {\n            \"frama\": frama_values,\n        }\n\n    def plot(self, *args):\n        qx.plot(\n            self.info,\n            *args,\n            (\n                (\"frama\", \"FRAMA\", \"blue\", 0, \"Main\"),\n            ),\n        )\n\n    def strategy(self, state, indicators):\n        if state[\"last_trade\"] is None:\n            return qx.Buy()\n\n        # Buy signal: Current price crosses above FRAMA\n        if isinstance(state[\"last_trade\"], qx.Sell) and state[\"close\"] > indicators[\"frama\"]:\n            return qx.Buy()\n\n        # Sell signal: Current price crosses below FRAMA\n        if isinstance(state[\"last_trade\"], qx.Buy) and state[\"close\"] < indicators[\"frama\"]:\n            return qx.Sell()\n\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_gross\",\n            \"sortino_ratio\",\n            \"trade_win_rate\",\n        ], {}\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2025-01-01\",\n    )\n\n    bot = FRAMABot()\n    qx.dispatch(bot, data, wallet)\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Sat Apr 12 17:31:41 2025": {
+  "tune": {
+   "period": 15.20714790419293,
+   "fractal_period": 2.0
+  },
+  "results": {
+   "roi": 1.8784035816897426,
+   "sortino_ratio": 0.8284035816897428,
+   "trade_win_rate": 0.3041958041958042
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Sat Apr 12 17:31:41 2025": {
+  "tune": {
+   "period": 15.099976403701662,
+   "fractal_period": 2.0
+  },
+  "results": {
+   "roi": 1.8784035816897429,
+   "sortino_ratio": 0.8284035816897428,
+   "trade_win_rate": 0.3041958041958042
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Sat Apr 12 17:31:41 2025": {
+  "tune": {
+   "period": 15.20714790419293,
+   "fractal_period": 2.0
+  },
+  "results": {
+   "roi": 1.8784035816897429,
+   "sortino_ratio": 0.8284035816897428,
+   "trade_win_rate": 0.30419580419580416
+  }
+ }
+}

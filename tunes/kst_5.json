@@ -1,0 +1,45 @@
+{
+ "source": "import numpy as np\nimport qtradex as qx\n\n\nclass KSTIndicatorBot(qx.BaseBot):\n    def __init__(self):\n        # KST parameters\n        self.tune = {\n            \"roc1_period\": 10.0,\n            \"roc2_period\": 15.0,\n            \"roc3_period\": 20.0,\n            \"roc4_period\": 30.0,\n            \"kst_smoothing\": 9.0,\n        }\n        self.clamps = {\n            \"roc1_period\": [5, 10.0, 100, 1],\n            \"roc2_period\": [5, 15.0, 100, 1],\n            \"roc3_period\": [5, 20.0, 100, 1],\n            \"roc4_period\": [5, 30.0, 100, 1],\n            \"kst_smoothing\": [5, 9.0, 100, 1],\n        }\n\n    def indicators(self, data):\n        # Calculate KST components using the provided kst function\n        kst_data = qx.qi.kst(\n            data[\"close\"],\n            self.tune[\"roc1_period\"],\n            self.tune[\"roc2_period\"],\n            self.tune[\"roc3_period\"],\n            self.tune[\"roc4_period\"],\n            self.tune[\"kst_smoothing\"]\n        )\n\n        # Return the calculated indicators\n        return {\n            \"kst\": kst_data[0],\n            \"kst_signal\": kst_data[1],\n        }\n\n    def plot(self, *args):\n        qx.plot(\n            self.info,\n            *args,\n            (\n                (\"kst\", \"KST\", \"blue\", 1, \"Main\"),\n                (\"kst_signal\", \"KST Signal\", \"orange\", 1, \"Main\"),\n            ),\n        )\n\n    def strategy(self, state, indicators):\n        if state[\"last_trade\"] is None:\n            return qx.Buy()\n\n        # Buy signal: KST crosses above KST Signal\n        if indicators[\"kst\"] > indicators[\"kst_signal\"] and isinstance(state[\"last_trade\"], qx.Sell):\n            return qx.Buy()\n\n        # Sell signal: KST crosses below KST Signal\n        if indicators[\"kst\"] < indicators[\"kst_signal\"] and isinstance(state[\"last_trade\"], qx.Buy):\n            return qx.Sell()\n\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_gross\",\n            \"sortino_ratio\",\n            \"trade_win_rate\",\n        ], {}\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2025-01-01\",\n    )\n\n    bot = KSTIndicatorBot()\n    qx.dispatch(bot, data, wallet)\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Sat Apr 12 17:16:30 2025": {
+  "tune": {
+   "roc1_period": 10.39975754440953,
+   "roc2_period": 15.151532635621315,
+   "roc3_period": 19.033290764751026,
+   "roc4_period": 29.65542976581166,
+   "kst_smoothing": 8.64886717480548
+  },
+  "results": {
+   "roi": 2.2293992858541145,
+   "sortino_ratio": 1.1793992858541145,
+   "trade_win_rate": 0.3969465648854962
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Sat Apr 12 17:16:30 2025": {
+  "tune": {
+   "roc1_period": 10.412958626963038,
+   "roc2_period": 15.019752142465027,
+   "roc3_period": 19.787281030221017,
+   "roc4_period": 29.537293769835046,
+   "kst_smoothing": 8.688095774981544
+  },
+  "results": {
+   "roi": 2.2293992858541145,
+   "sortino_ratio": 1.1793992858541142,
+   "trade_win_rate": 0.3969465648854962
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Sat Apr 12 17:16:30 2025": {
+  "tune": {
+   "roc1_period": 10.257168834736046,
+   "roc2_period": 14.280061130617351,
+   "roc3_period": 19.265873212882827,
+   "roc4_period": 29.894711026073143,
+   "kst_smoothing": 8.688095774981544
+  },
+  "results": {
+   "roi": 1.970265938685454,
+   "sortino_ratio": 0.9202659386854539,
+   "trade_win_rate": 0.4042553191489361
+  }
+ }
+}

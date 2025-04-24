@@ -142,6 +142,7 @@ class DirectionalMovement(qx.BaseBot):
         Plot the strategy with moving averages and DM indicators
         """
         qx.plot(
+            self.info,
             *args,
             (
                 ("ma_short", "Short MA", "white", 0, "Main"),

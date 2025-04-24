@@ -128,13 +128,14 @@ class Cthulhu(qx.BaseBot):
 
     def plot(self, *args):
         qx.plot(
+            self.info,
             *args,
             (
                 # key, name, color, index, title
-                ("upper", "Upper Band", "white", 0, "Main"),
-                ("lower", "Lower Band", "white", 0, "Main"),
-                ("ma0", "Middle Band", "cyan", 0, "Main"),
-                ("sar0", "Parabolic SAR", "yellow", 0, "Main"),
+                ("upper", "Upper Band", "white", 0, "Cthulhu"),
+                ("lower", "Lower Band", "white", 0, "Cthulhu"),
+                ("ma0", "Middle Band", "cyan", 0, "Cthulhu"),
+                ("sar0", "Parabolic SAR", "yellow", 0, "Cthulhu"),
             ),
         )
 

@@ -136,6 +136,7 @@ class MASabres(qx.BaseBot):
         Plot the strategy with moving averages
         """
         qx.plot(
+            self.info,
             *args,
             tuple(
                 (f"ma{i}_slope", "Moving Average", (i / 6, i / 6, 1, 1), 1, "Slopes")

@@ -1,0 +1,33 @@
+{
+ "source": "import numpy as np\nimport qtradex as qx\n\n\nclass VortexIndicatorBot(qx.BaseBot):\n    def __init__(self):\n        # Vortex Indicator parameters\n        self.tune = {\n            \"vortex_period\": 14.0,\n        }\n        self.clamps = {\n            \"vortex_period\": [5, 14.0, 100, 1],\n        }\n\n    def indicators(self, data):\n        # Calculate Vortex Indicator components using the provided vortex_indicator function\n        vortex_data = qx.qi.vortex(\n            data[\"high\"],\n            data[\"low\"],\n            self.tune[\"vortex_period\"]\n        )\n\n        # Return the calculated indicators\n        return {\n            \"vortex_plus\": vortex_data[0],\n            \"vortex_minus\": vortex_data[1],\n            \"vortex\": vortex_data[2],\n        }\n\n    def plot(self, *args):\n        qx.plot(\n            self.info,\n            *args,\n            (\n                (\"vortex_plus\", \"Vortex Plus\", \"green\", 1, \"Main\"),\n                (\"vortex_minus\", \"Vortex Minus\", \"red\", 0, \"Main\"),\n                (\"vortex\", \"Vortex\", \"blue\", 2, \"Main\"),\n            ),\n        )\n\n    def strategy(self, state, indicators):\n        if state[\"last_trade\"] is None:\n            return qx.Buy()\n\n        # Buy signal: Vortex Plus crosses above Vortex Minus\n        if indicators[\"vortex_plus\"] > indicators[\"vortex_minus\"] and isinstance(state[\"last_trade\"], qx.Sell):\n            return qx.Buy()\n\n        # Sell signal: Vortex Plus crosses below Vortex Minus\n        if indicators[\"vortex_plus\"] < indicators[\"vortex_minus\"] and isinstance(state[\"last_trade\"], qx.Buy):\n            return qx.Sell()\n\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_gross\",\n            \"sortino_ratio\",\n            \"trade_win_rate\",\n        ], {}\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2025-01-01\",\n    )\n\n    bot = VortexIndicatorBot()\n    qx.dispatch(bot, data, wallet)\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Sat Apr 12 17:12:17 2025": {
+  "tune": {
+   "vortex_period": 14.0
+  },
+  "results": {
+   "roi": 1.5665015365784605,
+   "sortino_ratio": 0.5165015365784604,
+   "trade_win_rate": 0.5733333333333334
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Sat Apr 12 17:12:17 2025": {
+  "tune": {
+   "vortex_period": 14.0
+  },
+  "results": {
+   "roi": 1.5665015365784605,
+   "sortino_ratio": 0.5165015365784604,
+   "trade_win_rate": 0.5733333333333334
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Sat Apr 12 17:12:17 2025": {
+  "tune": {
+   "vortex_period": 14.0
+  },
+  "results": {
+   "roi": 1.5665015365784605,
+   "sortino_ratio": 0.5165015365784604,
+   "trade_win_rate": 0.5733333333333334
+  }
+ }
+}

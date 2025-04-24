@@ -94,31 +94,33 @@ class TradFiInspired(qx.BaseBot):
 
         # MACD (Moving Average Convergence Divergence)
         macd, macd_signal, _ = qx.ti.macd(
-                data["close"],
-                self.tune["macd_fast_period"],
-                self.tune["macd_slow_period"],
-                self.tune["macd_signal_period"],
-            )
+            data["close"],
+            self.tune["macd_fast_period"],
+            self.tune["macd_slow_period"],
+            self.tune["macd_signal_period"],
+        )
 
         # Bollinger Bands
         bbands_upper, bbands_middle, bbands_lower = qx.ti.bbands(
-                data["close"],
-                self.tune["bollinger_window"],
-                self.tune["bollinger_std_dev"],
-            )
+            data["close"],
+            self.tune["bollinger_window"],
+            self.tune["bollinger_std_dev"],
+        )
 
         # Stochastic Oscillator (Stoch)
         stoch_k, stoch_d = qx.ti.stoch(
-                data["high"],
-                data["low"],
-                data["close"],
-                self.tune["stoch_k_period"],
-                self.tune["stoch_kslow_period"],
-                self.tune["stoch_d_period"],
-            )
+            data["high"],
+            data["low"],
+            data["close"],
+            self.tune["stoch_k_period"],
+            self.tune["stoch_kslow_period"],
+            self.tune["stoch_d_period"],
+        )
 
         # Average Directional Index (ADX)
-        adx = qx.ti.adx(data["high"], data["low"], data["close"], self.tune["adx_period"])
+        adx = qx.ti.adx(
+            data["high"], data["low"], data["close"], self.tune["adx_period"]
+        )
 
         return {
             "sma_short": sma_short,
@@ -141,6 +143,7 @@ class TradFiInspired(qx.BaseBot):
         Plot indicators for visual analysis.
         """
         qx.plot(
+            self.info,
             *args,
             (
                 ("sma_short", "SMA Short", "yellow", 0, "Trend"),

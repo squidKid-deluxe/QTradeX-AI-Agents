@@ -93,34 +93,38 @@ class CryptoMasterBot(qx.BaseBot):
 
         # MACD (Moving Average Convergence Divergence)
         macd, macd_signal, _ = qx.ti.macd(
-                data["close"],
-                self.tune["macd_short_period"],
-                self.tune["macd_long_period"],
-                self.tune["macd_signal_period"],
-            )
+            data["close"],
+            self.tune["macd_short_period"],
+            self.tune["macd_long_period"],
+            self.tune["macd_signal_period"],
+        )
 
         # Bollinger Bands
         upper_band, middle_band, lower_band = qx.ti.bbands(
-                data["close"],
-                self.tune["bollinger_period"],
-                self.tune["bollinger_deviation"],
-            )
+            data["close"],
+            self.tune["bollinger_period"],
+            self.tune["bollinger_deviation"],
+        )
 
         # Fisher Transform
-        fisher, fisher_signal = qx.ti.fisher(data["high"], data["low"], self.tune["fisher_period"])
+        fisher, fisher_signal = qx.ti.fisher(
+            data["high"], data["low"], self.tune["fisher_period"]
+        )
 
         # Stochastic Oscillator
         stoch_k, stoch_d = qx.ti.stoch(
-                data["high"],
-                data["low"],
-                data["close"],
-                self.tune["stoch_k_period"],
-                self.tune["stoch_kslow_period"],
-                self.tune["stoch_d_period"],
-            )
-        
+            data["high"],
+            data["low"],
+            data["close"],
+            self.tune["stoch_k_period"],
+            self.tune["stoch_kslow_period"],
+            self.tune["stoch_d_period"],
+        )
+
         # Average Directional Index (ADX)
-        adx = qx.ti.adx(data["high"], data["low"], data["close"], self.tune["adx_period"])
+        adx = qx.ti.adx(
+            data["high"], data["low"], data["close"], self.tune["adx_period"]
+        )
 
         # Volatility indicator (standard deviation of price)
         volatility = qx.ti.stddev(data["close"], self.tune["volatility_period"])
@@ -147,6 +151,7 @@ class CryptoMasterBot(qx.BaseBot):
         Plot indicators for visual analysis.
         """
         qx.plot(
+            self.info,
             *args,
             (
                 ("sma", "SMA", "yellow", 0, "Trend"),

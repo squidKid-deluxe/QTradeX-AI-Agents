@@ -73,18 +73,18 @@ class Confluence(qx.BaseBot):
 
         # MACD
         macd_line, macd_signal, macd_histogram = qx.ti.macd(
-                data["close"],
-                self.tune["macd_fast_period"],
-                self.tune["macd_slow_period"],
-                self.tune["macd_signal_period"],
-            )
+            data["close"],
+            self.tune["macd_fast_period"],
+            self.tune["macd_slow_period"],
+            self.tune["macd_signal_period"],
+        )
 
         # Bollinger Bands
         bollinger_upper, bollinger_middle, bollinger_lower = qx.ti.bbands(
-                data["close"],
-                self.tune["bollinger_period"],
-                self.tune["bollinger_stddev"],
-            )
+            data["close"],
+            self.tune["bollinger_period"],
+            self.tune["bollinger_stddev"],
+        )
 
         # Volume (default to simple volume)
         volume = qx.ti.sma(data["volume"], self.tune["bollinger_period"])
@@ -104,6 +104,7 @@ class Confluence(qx.BaseBot):
         Plot indicators for visual analysis.
         """
         qx.plot(
+            self.info,
             *args,
             (
                 ("ma1", "EMA 1", "white", 0, "Confluence"),

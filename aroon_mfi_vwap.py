@@ -61,6 +61,7 @@ class AroonMfiVwap(qx.BaseBot):
 
     def plot(self, *args):
         qx.plot(
+            self.info,
             *args,
             (
                 ("vwap", "VWAP", "blue", 0, "Primary"),
@@ -74,14 +75,16 @@ class AroonMfiVwap(qx.BaseBot):
     def indicators(self, data):
         short_ema = qx.ti.ema(data["close"], self.tune["short_period"])
         mfi = qx.ti.mfi(
-                data["high"],
-                data["low"],
-                data["close"],
-                data["volume"],
-                self.tune["mfi_period"],
-            )
+            data["high"],
+            data["low"],
+            data["close"],
+            data["volume"],
+            self.tune["mfi_period"],
+        )
         vwap = qx.ti.vwma(data["close"], data["volume"], self.tune["vwap_period"])
-        aroon_down, aroon_up = qx.ti.aroon(data["high"], data["low"], self.tune["aroon_period"])
+        aroon_down, aroon_up = qx.ti.aroon(
+            data["high"], data["low"], self.tune["aroon_period"]
+        )
 
         return {
             "short_ema": short_ema,

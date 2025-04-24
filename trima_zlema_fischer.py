@@ -101,7 +101,9 @@ class TrimaZlemaFisher(qx.BaseBot):
         trima_derivative = qx.derivative(trima)
 
         # Fisher Transform (FT)
-        fisher, fisher_signal = qx.ti.fisher(data["high"], data["low"], self.tune["fisher_period"])
+        fisher, fisher_signal = qx.ti.fisher(
+            data["high"], data["low"], self.tune["fisher_period"]
+        )
 
         # Derivative of Fisher Transform (FT)
         fisher_derivative = qx.derivative(fisher)
@@ -125,6 +127,7 @@ class TrimaZlemaFisher(qx.BaseBot):
         Plot indicators for visual analysis.
         """
         qx.plot(
+            self.info,
             *args,
             (
                 ("zlema", "Zero-Lag EMA", "yellow", 0, "Smoothing"),

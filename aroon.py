@@ -63,11 +63,14 @@ class Aroon(qx.BaseBot):
         # tulip indicators are exposed via qx.indicators.tulipy
         # and cached on backend for optimization speed
         return {
-            "aroon_osc": qx.ti.aroonosc(data["high"], data["low"], self.tune["aroon_period"]),
+            "aroon_osc": qx.ti.aroonosc(
+                data["high"], data["low"], self.tune["aroon_period"]
+            ),
         }
 
     def plot(self, data, states, indicators, block):
         qx.plot(
+            self.info,
             data,
             states,
             indicators,

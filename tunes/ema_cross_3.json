@@ -1,0 +1,159 @@
+{
+ "source": "\"\"\"\n\u2554\u2550\u2557\u2554\u2566\u2557\u2566\u2550\u2557\u2554\u2550\u2557\u2554\u2566\u2557\u2554\u2550\u2557\u2550\u2557 \u2566\n\u2551\u2550\u256c\u2557\u2551 \u2560\u2566\u255d\u2560\u2550\u2563 \u2551\u2551\u2551\u2563 \u2554\u2569\u2566\u255d\n\u255a\u2550\u255d\u255a\u2569 \u2569\u255a\u2550\u2569 \u2569\u2550\u2569\u255d\u255a\u2550\u255d\u2569 \u255a\u2550\n\nema_cross.py\n\nEma Cross\n\nIndicators:\n\n1. **Exponential Moving Averages (EMA)**:\n   - The bot uses two exponential moving averages (EMAs) with customizable periods (`ma1` and `ma2`).\n   - `ma1` and `ma2` are calculated using the Tulip Indicators (via the `tulipy.ema` function).\n\n   - **`ma1` (short-term EMA)**: A faster-moving average, typically more responsive to price changes.\n   - **`ma2` (long-term EMA)**: A slower-moving average, typically used to capture the general trend.\n\n2. **Indicator Calculation**:\n   - The EMAs are calculated using the closing prices of the asset over specified periods (`ma1` and `ma2`).\n   - The `qx.float_period` function is used to compute the values of the EMAs on the given price data.\n\nStrategy:\n\n1. **Moving Average Crossover Strategy**:\n   - The bot uses a basic moving average crossover strategy to generate buy and sell signals.\n   - The core logic of the strategy is:\n     - **qx.Buy Signal**: When `ma1` (short-term EMA) crosses above `ma2` (long-term EMA),\n     - **qx.Sell Signal**: When `ma1` (short-term EMA) crosses below `ma2` (long-term EMA), \n\"\"\"\n\n\nimport math\nimport time\n\nimport numpy as np\nimport qtradex as qx\n\n\nclass EmaCross(qx.BaseBot):\n    def __init__(self):\n        # tune values (moving averages)\n        self.tune = {\n            \"ma1_period\": 5,\n            \"ma2_period\": 10.0,\n            \"threshold\": 1.0,\n        }\n        self.tune = {\n            \"ma1_period\": 5,\n            \"ma2_period\": 140.0,\n            \"threshold\": 1.03,\n        }\n        # optimizer clamps (min, max, strength)\n        self.clamps = {\n            \"ma1_period\": [5, 5, 100, 1],\n            \"ma2_period\": [10, 10.0, 150, 1],\n            \"threshold\": [1.0, 1.0, 1.1, 1],\n        }\n\n    def indicators(self, data):\n        # tulip indicators are exposed via qx.indicators.tulipy\n        # and cached on backend for optimization speed\n        ma1 = qx.ti.sma(data[\"close\"], self.tune[\"ma1_period\"])\n        return {\n            \"top\": ma1 * self.tune[\"threshold\"],\n            \"bottom\": ma1 / self.tune[\"threshold\"],\n            \"ma2\": qx.ti.sma(data[\"close\"], self.tune[\"ma2_period\"]),\n        }\n\n    def plot(self, *args):\n        qx.plot(\n            self.info,\n            *args,\n            (\n                # key, name, color, index, title\n                (\"top\", \"MA 1 Top\", \"white\", 0, \"Main\"),\n                (\"bottom\", \"MA 1 Bottom\", \"white\", 0, \"Main\"),\n                (\"ma2\", \"MA 2\", \"cyan\", 0, \"Main\"),\n            ),\n        )\n\n    def strategy(self, state, indicators):\n        if state[\"last_trade\"] is None:\n            return qx.Buy()\n        if indicators[\"bottom\"] > indicators[\"ma2\"] and isinstance(\n            state[\"last_trade\"], qx.Sell\n        ):\n            return qx.Buy()\n        if indicators[\"top\"] < indicators[\"ma2\"] and isinstance(\n            state[\"last_trade\"], qx.Buy\n        ):\n            return qx.Sell()\n        return None\n\n    def fitness(self, states, raw_states, asset, currency):\n        return [\n            \"roi_gross\",\n            \"sortino_ratio\",\n            \"trade_win_rate\",\n        ], {}\n\n\ndef main():\n    asset, currency = \"BTC\", \"USDT\"\n    wallet = qx.PaperWallet({asset: 0, currency: 1})\n    data = qx.Data(\n        exchange=\"kucoin\",\n        asset=asset,\n        currency=currency,\n        begin=\"2021-01-01\",\n        end=\"2025-01-01\",\n    )\n\n    bot = EmaCross()\n    qx.dispatch(bot, data, wallet)\n\n\nif __name__ == \"__main__\":\n    main()\n",
+ "BEST ROI TUNE_Sat Apr 12 13:28:14 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 150.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.572979868335311,
+   "sortino_ratio": 1.5229798683353108,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST ROI TUNE_Sat Apr 12 13:30:53 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 150.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.572979868335311,
+   "sortino_ratio": 1.5229798683353108,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Sat Apr 12 13:30:53 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 150.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.572979868335311,
+   "sortino_ratio": 1.5229798683353108,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Sat Apr 12 13:30:54 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 140.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.284485970248402,
+   "sortino_ratio": 1.2344859702484021,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST ROI TUNE_Sat Apr 12 13:32:02 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 150.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.572979868335311,
+   "sortino_ratio": 1.5229798683353108,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Sat Apr 12 13:32:02 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 150.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.572979868335311,
+   "sortino_ratio": 1.5229798683353108,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Sat Apr 12 13:32:02 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 140.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.284485970248402,
+   "sortino_ratio": 1.2344859702484021,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST ROI TUNE_Sat Apr 12 13:50:45 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 150.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.572979868335311,
+   "sortino_ratio": 1.5229798683353108,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Sat Apr 12 13:50:45 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 150.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.572979868335311,
+   "sortino_ratio": 1.5229798683353108,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Sat Apr 12 13:50:45 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 140.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.284485970248402,
+   "sortino_ratio": 1.2344859702484021,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST ROI TUNE_Sat Apr 12 13:50:54 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 150.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.572979868335311,
+   "sortino_ratio": 1.5229798683353108,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST SORTINO_RATIO TUNE_Sat Apr 12 13:50:54 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 150.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.572979868335311,
+   "sortino_ratio": 1.5229798683353108,
+   "trade_win_rate": 0.625
+  }
+ },
+ "BEST TRADE_WIN_RATE TUNE_Sat Apr 12 13:50:54 2025": {
+  "tune": {
+   "ma1_period": 12.916666666666668,
+   "ma2_period": 140.0,
+   "threshold": 1.03
+  },
+  "results": {
+   "roi": 2.284485970248402,
+   "sortino_ratio": 1.2344859702484021,
+   "trade_win_rate": 0.625
+  }
+ }
+}

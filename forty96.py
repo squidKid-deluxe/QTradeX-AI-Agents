@@ -111,6 +111,7 @@ class Forty96(qx.BaseBot):
 
     def plot(self, *args):
         qx.plot(
+            self.info,
             *args,
             tuple(
                 [

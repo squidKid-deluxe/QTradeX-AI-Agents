@@ -96,21 +96,23 @@ class MasterBot(qx.BaseBot):
         Calculate indicators using QX's indicator library (EMA, RSI, Stochastic, ATR).
         """
         macd_line, macd_signal, _ = qx.ti.macd(
-                data["close"],
-                self.tune["macd_fast_period"],
-                self.tune["macd_slow_period"],
-                self.tune["macd_signal_period"],
-            )
+            data["close"],
+            self.tune["macd_fast_period"],
+            self.tune["macd_slow_period"],
+            self.tune["macd_signal_period"],
+        )
         stoch_k, stoch_d = qx.ti.stoch(
-                data["close"],
-                data["high"],
-                data["low"],
-                self.tune["k_period"],
-                self.tune["k_slowing"],
-                self.tune["d_period"],
-            )
+            data["close"],
+            data["high"],
+            data["low"],
+            self.tune["k_period"],
+            self.tune["k_slowing"],
+            self.tune["d_period"],
+        )
         rsi = qx.ti.rsi(data["close"], self.tune["rsi_period"])
-        atr = qx.ti.atr(data["high"], data["low"], data["close"], self.tune["atr_period"])
+        atr = qx.ti.atr(
+            data["high"], data["low"], data["close"], self.tune["atr_period"]
+        )
 
         return {
             "macd_line": macd_line,
@@ -126,6 +128,7 @@ class MasterBot(qx.BaseBot):
         Plot the indicators and strategy signals.
         """
         qx.plot(
+            self.info,
             *args,
             (
                 ("macd_line", "MACD Line", "blue", 3, "Main"),

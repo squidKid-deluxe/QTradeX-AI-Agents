@@ -83,6 +83,7 @@ class IChing(qx.BaseBot):
 
     def plot(self, *args):
         qx.plot(
+            self.info,
             *args,
             tuple(
                 (f"ma{idx}_slope", f"MA {idx} Slope", color, 1, "Slope")
@@ -131,9 +132,8 @@ def main():
         asset=asset,
         currency=currency,
         begin="2021-01-01",
-        # end="2023-01-01",
+        end="2025-01-01",
     )
-    dta = qx.public.utilities.fetch_composite_data(data, 60 * 30)
 
     bot = IChing()
     qx.dispatch(bot, data, wallet)
