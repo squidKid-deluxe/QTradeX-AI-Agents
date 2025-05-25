@@ -6,6 +6,12 @@ This repository contains a collection of algorithmic trading strategies implemen
 
 To install QTradex, see the Installation section at the link above.
 
+Read the core docs at [QtradeX SDK DeepWiki](https://deepwiki.com/squidKid-deluxe/QTradeX-Algo-Trading-SDK).
+
+Read the bot docs at [QtradeX AI Agents DeepWiki](https://deepwiki.com/squidKid-deluxe/QTradeX-AI-Agents).
+
+Join the community on [QtradeX Telegram Group](https://t.me/qtradex_sdk). 
+
 Each strategy leverages technical indicators to generate buy and sell signals for trading assets. Below is a brief description of each strategy.
 
 ---
